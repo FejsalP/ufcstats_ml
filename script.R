@@ -351,6 +351,8 @@ clean_df <- subset(df2, select = -c(event_title, event_date, event_location,
 # Select just rows which have win_method as some kind of "decision"
 clean_df <- clean_df[clean_df$win_method == "Decision - Unanimous" | clean_df$win_method == "Decision - Split" | clean_df$win_method == "Decision - Majority",]
 
+clean_df <- subset(clean_df, select = -c(win_method))
+
 # Drop all fights that are not in "3 Rnd (5-5-5)" time format.
 clean_df <- clean_df[clean_df$time_format == "3 Rnd (5-5-5)", ]
 
@@ -377,11 +379,12 @@ clean_df[grep("_ctrl_time_", colnames(clean_df))] <- lapply(clean_df[grep("_ctrl
 
 # Converting character columns to factors
 clean_df$winner <- as.factor(clean_df$winner)
-clean_df$win_method <- as.factor(clean_df$win_method)
 
 # Converting all other columns to numeric data type
 clean_df[, -c(1:2)] <- sapply(clean_df[, -c(1:2)], as.numeric)
 
+
+clean_df <- clean_df[, -c(2:19)]
 
 
 
