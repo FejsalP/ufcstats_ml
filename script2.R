@@ -1,9 +1,6 @@
 df <- read.csv("ufcstats_cleaned.csv", header = TRUE, sep = ",")
 
-str(df) # all variables are int except target and win_method
-#dropping win_method, unnecessary
-df <- df[,-2]
-
+str(df) 
 set.seed(1)
 
 # Splitting on training and testing data
@@ -27,6 +24,7 @@ y <- as.factor(training_data$winner)
 ufc_dtree <- C5.0(x, y)
 
 # Plotting decision tree
+
 plot(ufc_dtree)
 
 # Checking attribute usage
