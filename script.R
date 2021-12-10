@@ -334,8 +334,6 @@ df2 <- df[,1:302]
 
 write.csv(df2, 'ufcstats_new2.csv', row.names = FALSE)
 
-
-
 ################################################################################
 ################################ DATA CLEANING #################################
 ################################################################################
@@ -383,6 +381,7 @@ clean_df$winner <- as.factor(clean_df$winner)
 # Converting all other columns to numeric data type
 clean_df[, -c(1:2)] <- sapply(clean_df[, -c(1:2)], as.numeric)
 
+write.csv(clean_df, 'ufcstats_cleaned.csv', row.names = FALSE)
 
 clean_df <- clean_df[, -c(2:19)]
 
