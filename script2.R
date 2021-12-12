@@ -86,7 +86,7 @@ library(randomForest)
 
 ufc_rf <- randomForest(x, y, ntree = 500, mtry = sqrt(length(x)), importance=TRUE)
 
-ufc_predictions_rf <- predict (ufc_rf, test_data, type='response')
+ufc_predictions_rf <- predict(ufc_rf, test_data, type='response')
 
 # Evaluating performance
 
@@ -112,8 +112,8 @@ library(MLmetrics)
 mixSummary <- function(data, lev = NULL, model = NULL){
   out <- c(twoClassSummary(data, lev, model), prSummary(data, lev, model), defaultSummary(data, lev, model))
   return (out)
-  
 }
+
 trControl <- trainControl(method='cv',
                           number = 10,
                           classProbs = TRUE,
@@ -153,7 +153,7 @@ ufc_rf_cv_10 <- train (x = training_data[,-1],
 ufc_rf_cv_10$results[c('Accuracy', 'AUC', 'Sens', 'Spec')]
 View(ufc_rf_cv_10)
 
-pred_rf_cv <- predict(ufc_dtree_cv_10, newdata = test_data)
+pred_rf_cv <- predict(ufc_rf_cv_10, newdata = test_data)
 pred_rf_cv
 confusionMatrix_rf_cv <- confusionMatrix(as.factor(as.factor(pred_rf_cv)), 
                                             as.factor(test_data$winner), 
@@ -171,4 +171,27 @@ all_metrics <- data.frame(dtree_metrics, rf_metrics, dtree_cv_metrics, rf_cv_met
 all_metrics # Increase in all 4 metrics after CV or RandomForests
 # RF with 10CV takes ~10x more time to process and still delivers the same result
 # 
+
+################################################################################
+####################################   KNN   ###################################
+################################################################################
+
+trControl_knn <- trainControl(method='cv',
+                          number = 10,
+                          classProbs = TRUE,
+                          summaryFunction = mixSummary)
+
+ufc_knn_cv_10 <- train (winner ~ .,
+                          data = training_data, 
+                          method ="knn", 
+                          trControl = trControl, 
+                          preProcess = c("scale"),
+                          tuneGrid = expand.grid(k = 1:15),
+                          metric = 'Accuracy',)
+
+
+
+
+
+
 
