@@ -1,4 +1,11 @@
 library(dplyr)
+library(caret)
+library(C50)
+library(gmodels)
+library(caret)
+library(MLmetrics)
+library(randomForest)
+library(class)
 df <- read.csv("ufcstats_cleaned.csv", header = TRUE, sep = ",")
 
 str(df) 
@@ -6,19 +13,20 @@ set.seed(1)
 
 #Boxplots
 
-control_times <- select(df, c(ctrl_time_rnd_1, ctrl_time_rnd_2, ctrl_time_rnd_3))
-boxplot(control_times)
+# control_times <- select(df, c(ctrl_time_rnd_1, ctrl_time_rnd_2, ctrl_time_rnd_3))
+# boxplot(control_times)
+# 
+# boxplot(winner ~ ctrl_time_rnd_1, data=df, xlab='Time', ylab='Winner')
+# # Merging red and blue columns
+# df <- df %>% mutate (kd_rnd_1 = red_kd_rnd_1 - blue_kd_rnd_1)
+# df <- df %>% mutate (sig_str_rnd_1 = red_sig_str_rnd_1 - blue_sig_str_rnd_1)
+# df <- df %>% mutate (ctrl_time_rnd_1 = red_ctrl_time_rnd_1 - blue_ctrl_time_rnd_1)
+# df <- df %>% mutate (ctrl_time_rnd_2 = red_ctrl_time_rnd_2 - blue_ctrl_time_rnd_2)
+# df <- df %>% mutate (ctrl_time_rnd_3 = red_ctrl_time_rnd_3 - blue_ctrl_time_rnd_3)
+# 
+# # ..
 
-boxplot(winner ~ ctrl_time_rnd_1, data=df, xlab='Time', ylab='Winner')
-# Merging red and blue columns
-df <- df %>% mutate (kd_rnd_1 = red_kd_rnd_1 - blue_kd_rnd_1)
-df <- df %>% mutate (sig_str_rnd_1 = red_sig_str_rnd_1 - blue_sig_str_rnd_1)
-df <- df %>% mutate (ctrl_time_rnd_1 = red_ctrl_time_rnd_1 - blue_ctrl_time_rnd_1)
-df <- df %>% mutate (ctrl_time_rnd_2 = red_ctrl_time_rnd_2 - blue_ctrl_time_rnd_2)
-df <- df %>% mutate (ctrl_time_rnd_3 = red_ctrl_time_rnd_3 - blue_ctrl_time_rnd_3)
-
-# ..
-df$winner <- ifelse(df$winner=='red', 1, 0)
+# df$winner <- ifelse(df$winner=='red', 1, 0)
 
 # Splitting on training and testing data
 # 80% on training, 20% on test
@@ -34,8 +42,6 @@ prop.table(table(test_data$winner)) #0.4 blue, 0.6 red
 # Proportion of the target class is almost the same, so we are good to go.
 
 # Training the data on the C5.0 decision tree
-# Importing C5.0 decision tree
-library(C50)
 x <- training_data[-1] # All features except class.
 y <- as.factor(training_data$winner)
 ufc_dtree <- C5.0(x, y)
@@ -55,18 +61,16 @@ summary(ufc_dtree) # Several attributes can be removed.
 
 # Creating predictions
 ufc_predictions_dtree <- predict(object = ufc_dtree, test_data)
-ufc_predictions
-test_data$winner
 
-library(gmodels)
+
 #confusion matrix #1, absence is "positive" class
 CrossTable(test_data$winner, ufc_predictions_dtree, 
            prop.chisq = FALSE, dnn=c('Actual', 'Predicted'))
-library(caret)
+
 #confusion matrix # positive is 1 (absence)
 confusionMatrixDTree <- confusionMatrix(as.factor(ufc_predictions_dtree), 
                                     as.factor(test_data$winner), 
-                                    positive = "1", 
+                                    positive = "red", 
                                     dnn= c("Predicted", "Reference/Actual"))
 dtree_metrics <- c(confusionMatrixDTree$overall['Accuracy'], 
                    confusionMatrixDTree$overall['Kappa'], 
@@ -79,7 +83,7 @@ dtree_metrics
 # Using boosting
 
 # Random forests
-library(randomForest)
+
 
 # x - training data
 # y - factor vector with class for each row in the training data
@@ -93,7 +97,7 @@ ufc_predictions_rf <- predict(ufc_rf, test_data, type='response')
 # Confusion matrix for Random Forest
 confusionMatrix_rf <- confusionMatrix(as.factor(ufc_predictions_rf), 
                                       as.factor(test_data$winner), 
-                                      positive = "1", 
+                                      positive = "red", 
                                       dnn= c("Predicted", "Reference/Actual"))
 confusionMatrix_rf
 rf_metrics <- c(confusionMatrix_rf$overall['Accuracy'], 
@@ -102,8 +106,7 @@ rf_metrics <- c(confusionMatrix_rf$overall['Accuracy'],
                 confusionMatrix_rf$byClass['Specificity'])
 
 # Cross-validation 10-fold for C5.0 decision tree
-library(caret)
-library(MLmetrics)
+
 
 #twoClassSummary for Sensitivity, ROC and Specificity
 #prSummary for  AUC, Precision, Recall and F
@@ -119,7 +122,7 @@ trControl <- trainControl(method='cv',
                           classProbs = TRUE,
                           summaryFunction = mixSummary,
                           savePredictions = TRUE)
-training_data$winner <- ifelse(training_data$winner==1, 'red', 'blue')
+# training_data$winner <- ifelse(training_data$winner==1, 'red', 'blue')
 ufc_dtree_cv_10 <- train (x = training_data[,-1],
                           y = training_data[,1],
                           data = training_data, 
@@ -131,7 +134,7 @@ View(ufc_dtree_cv_10)
 
 pred_dtree_cv <- predict(ufc_dtree_cv_10, newdata = test_data)
 pred_dtree_cv
-test_data$winner <- ifelse(test_data$winner==1, 'red', 'blue')
+# test_data$winner <- ifelse(test_data$winner==1, 'red', 'blue')
 confusionMatrix_dtree_cv <- confusionMatrix(as.factor(as.factor(pred_dtree_cv)), 
                                                       as.factor(test_data$winner), 
                                                       positive = "red", 
@@ -167,14 +170,36 @@ rf_cv_metrics <- c(confusionMatrix_rf_cv$overall['Accuracy'],
 
 
 
-all_metrics <- data.frame(dtree_metrics, rf_metrics, dtree_cv_metrics, rf_cv_metrics)
-all_metrics # Increase in all 4 metrics after CV or RandomForests
-# RF with 10CV takes ~10x more time to process and still delivers the same result
-# 
 
 ################################################################################
 ####################################   KNN   ###################################
 ################################################################################
+
+#min_max normalization
+min_max_norm <- function(x){
+  ((x-min(x))/(max(x)-min(x)))
+}
+ufc_normalized <- as.data.frame(lapply(df[,-1], min_max_norm))
+training_data_knn <- ufc_normalized[sample_, ] #random 216 rows
+test_data_knn <- ufc_normalized[-sample_, ] # remaining 54 rows that are not in training_set (270-216)
+training_label_knn <- df[sample_, 1]
+test_label_knn <- df[-sample_, 1]
+
+#training the data on KNN
+sqrt(length(training_data$winner))
+ufc_knn <- knn(train = training_data_knn, test = test_data_knn, cl = training_label_knn, k = 45, prob=TRUE)
+
+confusionMatrix_knn <-confusionMatrix(as.factor(ufc_knn),
+                                as.factor(test_label_knn),
+                                positive='red',
+                                dnn= c("Predicted", "Reference/Actual"))
+
+knn_metrics <- c(confusionMatrix_knn$overall['Accuracy'], 
+                 confusionMatrix_knn$overall['Kappa'], 
+                 confusionMatrix_knn$byClass['Sensitivity'], 
+                 confusionMatrix_knn$byClass['Specificity'])
+
+
 
 trControl_knn <- trainControl(method='cv',
                           number = 10,
@@ -184,12 +209,27 @@ trControl_knn <- trainControl(method='cv',
 ufc_knn_cv_10 <- train (winner ~ .,
                           data = training_data, 
                           method ="knn", 
-                          trControl = trControl, 
+                          trControl = trControl_knn, 
                           preProcess = c("scale"),
-                          tuneGrid = expand.grid(k = 1:15),
-                          metric = 'Accuracy',)
+                          tuneGrid = expand.grid(k = 1:50),
+                          metric = 'Accuracy')
+
+pred_knn_cv <- predict(ufc_knn_cv_10, newdata = test_data)
+
+confusionMatrix_knn_cv <- confusionMatrix(as.factor(as.factor(pred_knn_cv)), 
+                                         as.factor(test_data$winner), 
+                                         positive = "red", 
+                                         dnn= c("Predicted", "Reference/Actual"))
+
+knn_cv_metrics <- c(confusionMatrix_knn_cv$overall['Accuracy'], 
+                    confusionMatrix_knn_cv$overall['Kappa'], 
+                    confusionMatrix_knn_cv$byClass['Sensitivity'], 
+                    confusionMatrix_knn_cv$byClass['Specificity'])
 
 
+all_metrics <- data.frame(dtree_metrics, rf_metrics, dtree_cv_metrics, rf_cv_metrics,knn_metrics, knn_cv_metrics)
+all_metrics # Increase in all 4 metrics after CV or RandomForests
+# RF with 10CV takes ~10x more time to process and still delivers the same result
 
 
 
