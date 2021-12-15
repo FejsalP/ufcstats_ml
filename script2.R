@@ -6,6 +6,8 @@ library(caret)
 library(MLmetrics)
 library(randomForest)
 library(class)
+library(MLeval)
+
 df <- read.csv("ufcstats_cleaned.csv", header = TRUE, sep = ",")
 
 str(df) 
@@ -62,12 +64,9 @@ summary(ufc_dtree) # Several attributes can be removed.
 # Creating predictions
 ufc_predictions_dtree <- predict(object = ufc_dtree, test_data)
 
-
-#confusion matrix #1, absence is "positive" class
 CrossTable(test_data$winner, ufc_predictions_dtree, 
            prop.chisq = FALSE, dnn=c('Actual', 'Predicted'))
 
-#confusion matrix # positive is 1 (absence)
 confusionMatrixDTree <- confusionMatrix(as.factor(ufc_predictions_dtree), 
                                     as.factor(test_data$winner), 
                                     positive = "red", 
@@ -128,7 +127,7 @@ ufc_dtree_cv_10 <- train (x = training_data[,-1],
                           data = training_data, 
                           method ='C5.0', 
                           trControl = trControl, 
-                          metric = 'Accuracy',)
+                          metric = 'ROC',)
 ufc_dtree_cv_10$results[c('Accuracy', 'AUC', 'Sens', 'Spec')]
 View(ufc_dtree_cv_10)
 
@@ -152,7 +151,7 @@ ufc_rf_cv_10 <- train (x = training_data[,-1],
                           data = training_data, 
                           method ='rf', 
                           trControl = trControl, 
-                          metric = 'Accuracy',)
+                          metric = 'ROC',)
 ufc_rf_cv_10$results[c('Accuracy', 'AUC', 'Sens', 'Spec')]
 View(ufc_rf_cv_10)
 
@@ -205,14 +204,20 @@ trControl_knn <- trainControl(method='cv',
                           number = 10,
                           classProbs = TRUE,
                           summaryFunction = mixSummary)
-
+str(training_data)
+training_data_test <- training_data
+str(training_data_test)
+training_data_test$winner <- as.factor(training_data_test$winner)
 ufc_knn_cv_10 <- train (winner ~ .,
-                          data = training_data, 
+                          data = training_data_test, 
                           method ="knn", 
                           trControl = trControl_knn, 
-                          preProcess = c("scale"),
+                          preProcess = c("center", "scale"),
                           tuneGrid = expand.grid(k = 1:50),
-                          metric = 'Accuracy')
+                          metric = 'ROC')
+#Final value for k is 50
+ufc_knn_cv_10$results[c('Accuracy', 'AUC', 'Sens', 'Spec')][50,] # Gets performance metrics when K=50
+
 
 pred_knn_cv <- predict(ufc_knn_cv_10, newdata = test_data)
 
@@ -231,7 +236,49 @@ all_metrics <- data.frame(dtree_metrics, rf_metrics, dtree_cv_metrics, rf_cv_met
 all_metrics # Increase in all 4 metrics after CV or RandomForests
 # RF with 10CV takes ~10x more time to process and still delivers the same result
 
+#Plotting ROC curves
+roc_curves <- evalm(list(ufc_dtree_cv_10, ufc_rf_cv_10),gnames=c('DTree CV10','RF CV10'))
+# ROC for DTree CV 10 = 0.9
+# ROC for RF CV 10 = 0.91
+knn_cv_10_roc <- evalm(ufc_knn_cv_10, gnames='KNN CV10')
 
+# test1 <- evalm(ufc_dtree_cv_10,plots='r',rlinethick=0.8,fsize=8)
+# test2 <- evalm(ufc_rf_cv_10,plots='r',rlinethick=0.8,fsize=8)
 
+### ROC curve for regular KNN
 
+library(ROCR)
+#Getting ROC curve and AUC for KNN (from class package)
+prob_knn <- attr(ufc_knn, 'prob')
+prob_knn <- 2*ifelse(ufc_knn == '-1', 1-prob, prob) - 1
+pred_knn <- prediction(prob_knn, test_label_knn)
+performance_knn <- performance(pred_knn, 'tpr','fpr')
+
+#Plotting the ROC Curve for KNN
+plot(performance_knn, avg='threshold',colorize=TRUE, lwd=3, main='ROC Curve')
+
+#Getting the AUC value for KNN
+knn_auc <- performance(pred_knn, measure='auc')
+str(knn_auc)
+knn_auc_value <- knn_auc@y.values #0.6926078 AUC for KNN
+
+#Getting AUC value for C5.0 Dtree
+
+prob_dtree <- predict(ufc_dtree, test_data, type='prob')[,2] # only second column is needed i.e. probabilities for label 1/red
+pred_dtree <- prediction(prob_dtree, labels = test_data$winner)
+performance_dtree <- performance(pred_dtree, 'tpr','fpr')
+#Plotting the ROC Curve for DTree C5.0
+plot(performance_dtree, main='ROC Curve for Dtree')
+
+#Getting the AUC value for DTree C5.0
+dtree_auc <- performance(pred_dtree, measure='auc')
+dtree_auc_value <- dtree_auc@y.values #0.8075596 AUC for Dtree
+dtree_auc_value
+
+#dtree c5.0
+#knn
+#rf cv10
+#dtree cv10
+
+#
 
