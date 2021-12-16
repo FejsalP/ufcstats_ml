@@ -7,6 +7,8 @@ library(MLmetrics)
 library(randomForest)
 library(class)
 library(MLeval)
+library(pROC)
+library(ROCR)
 
 df <- read.csv("ufcstats_cleaned.csv", header = TRUE, sep = ",")
 
@@ -32,8 +34,8 @@ set.seed(1)
 
 # Splitting on training and testing data
 # 80% on training, 20% on test
-length(df$winner)
-0.8*2675
+length(df$winner) #number of samples in data
+0.8*2675 # = 2140
 sample_ <- sample(2675, 2140)
 
 training_data <- df[sample_,]
@@ -45,7 +47,7 @@ prop.table(table(test_data$winner)) #0.4 blue, 0.6 red
 
 # Training the data on the C5.0 decision tree
 x <- training_data[-1] # All features except class.
-y <- as.factor(training_data$winner)
+y <- as.factor(training_data$winner) 
 ufc_dtree <- C5.0(x, y)
 
 # Plotting decision tree
@@ -78,12 +80,10 @@ dtree_metrics <- c(confusionMatrixDTree$overall['Accuracy'],
 dtree_metrics
 
 #5 Improving the performance of the model
-
 # Using boosting
 
+
 # Random forests
-
-
 # x - training data
 # y - factor vector with class for each row in the training data
 
@@ -174,18 +174,19 @@ rf_cv_metrics <- c(confusionMatrix_rf_cv$overall['Accuracy'],
 ####################################   KNN   ###################################
 ################################################################################
 
-#min_max normalization
+#min_max normalization function
 min_max_norm <- function(x){
   ((x-min(x))/(max(x)-min(x)))
 }
+#normalizing the data
 ufc_normalized <- as.data.frame(lapply(df[,-1], min_max_norm))
-training_data_knn <- ufc_normalized[sample_, ] #random 216 rows
-test_data_knn <- ufc_normalized[-sample_, ] # remaining 54 rows that are not in training_set (270-216)
-training_label_knn <- df[sample_, 1]
-test_label_knn <- df[-sample_, 1]
+training_data_knn <- ufc_normalized[sample_, ] #random 2140 rows
+test_data_knn <- ufc_normalized[-sample_, ] # remaining 535 rows that are not in training_set (2675-2140)
+training_label_knn <- df[sample_, 1] #target class for training data
+test_label_knn <- df[-sample_, 1] #target class for test data
 
 #training the data on KNN
-sqrt(length(training_data$winner))
+sqrt(length(training_data$winner)) #rule of thumb for choosing K
 ufc_knn <- knn(train = training_data_knn, test = test_data_knn, cl = training_label_knn, k = 45, prob=TRUE)
 
 confusionMatrix_knn <-confusionMatrix(as.factor(ufc_knn),
@@ -199,22 +200,24 @@ knn_metrics <- c(confusionMatrix_knn$overall['Accuracy'],
                  confusionMatrix_knn$byClass['Specificity'])
 
 
-
+#train control object that is required for the train()
 trControl_knn <- trainControl(method='cv',
                           number = 10,
                           classProbs = TRUE,
-                          summaryFunction = mixSummary)
+                          summaryFunction = mixSummary,
+                          savePredictions = TRUE)
 str(training_data)
 training_data_test <- training_data
 str(training_data_test)
 training_data_test$winner <- as.factor(training_data_test$winner)
 ufc_knn_cv_10 <- train (winner ~ .,
-                          data = training_data_test, 
+                          data = training_data, 
                           method ="knn", 
                           trControl = trControl_knn, 
                           preProcess = c("center", "scale"),
                           tuneGrid = expand.grid(k = 1:50),
-                          metric = 'ROC')
+                          metric = 'Accuracy')
+evalm(ufc_knn_cv_10)
 #Final value for k is 50
 ufc_knn_cv_10$results[c('Accuracy', 'AUC', 'Sens', 'Spec')][50,] # Gets performance metrics when K=50
 
@@ -236,19 +239,18 @@ all_metrics <- data.frame(dtree_metrics, rf_metrics, dtree_cv_metrics, rf_cv_met
 all_metrics # Increase in all 4 metrics after CV or RandomForests
 # RF with 10CV takes ~10x more time to process and still delivers the same result
 
-#Plotting ROC curves
-roc_curves <- evalm(list(ufc_dtree_cv_10, ufc_rf_cv_10),gnames=c('DTree CV10','RF CV10'))
-# ROC for DTree CV 10 = 0.9
-# ROC for RF CV 10 = 0.91
+#Plotting ROC curves for models with cross-validation (Decision tree, random forest and KNN) 
+roc_curves <- evalm(list(ufc_dtree_cv_10, ufc_rf_cv_10, ufc_knn_cv_10),gnames=c('DTree CV10','RF CV10', 'KNN CV10'))
+# AUC for DTree CV 10 = 0.9 roc_curves$stdres$`DTree CV10`$Score[13]
+# AUC for RF CV 10 = 0.91 roc_curves$stdres$`RF CV10`$Score[13]
+# AUC for KNN CV 10 = 0.88 roc_curves$stdres$`DTree CV10`$Score[13]
 knn_cv_10_roc <- evalm(ufc_knn_cv_10, gnames='KNN CV10')
 
 # test1 <- evalm(ufc_dtree_cv_10,plots='r',rlinethick=0.8,fsize=8)
 # test2 <- evalm(ufc_rf_cv_10,plots='r',rlinethick=0.8,fsize=8)
 
-### ROC curve for regular KNN
+## Getting AUC value for and plotting the ROC Curve for KNN (from class library)
 
-library(ROCR)
-#Getting ROC curve and AUC for KNN (from class package)
 prob_knn <- attr(ufc_knn, 'prob')
 prob_knn <- 2*ifelse(ufc_knn == '-1', 1-prob, prob) - 1
 pred_knn <- prediction(prob_knn, test_label_knn)
@@ -262,7 +264,7 @@ knn_auc <- performance(pred_knn, measure='auc')
 str(knn_auc)
 knn_auc_value <- knn_auc@y.values #0.6926078 AUC for KNN
 
-#Getting AUC value for C5.0 Dtree
+## Getting AUC value for and plotting the ROC Curve for C5.0 Decision Tree (from C5.0 library)
 
 prob_dtree <- predict(ufc_dtree, test_data, type='prob')[,2] # only second column is needed i.e. probabilities for label 1/red
 pred_dtree <- prediction(prob_dtree, labels = test_data$winner)
@@ -273,12 +275,30 @@ plot(performance_dtree, main='ROC Curve for Dtree')
 #Getting the AUC value for DTree C5.0
 dtree_auc <- performance(pred_dtree, measure='auc')
 dtree_auc_value <- dtree_auc@y.values #0.8075596 AUC for Dtree
-dtree_auc_value
+dtree_auc_value #0.8075596
 
-#dtree c5.0
-#knn
-#rf cv10
-#dtree cv10
+# Getting AUC value and ploting the ROC Curve for Random Forest (from randomForest library)
+prob_rf <- as.vector(ufc_rf$votes[,2]) #probabilites
+pred_rf <- prediction(prob_rf, training_data$winner); #prediction instance
 
-#
+rf_auc <- performance(pred_rf, measure = "auc") # AUC performance
+rf_auc_value <- rf_auc@y.values #AUC value
+rf_auc_value
+performance_rf <- performance(pred_rf, 'tpr','fpr') #true vs false positive performance
+plot(performance_rf, main='ROC Curve for RF')
+
+############################
+########### SVM ############
+############################
+
+library(kernlab)
+
+ufc_svm <- ksvm(winner ~ ., data = training_data_test, kernel='rbfdot')
+pred_svm <- predict(ufc_svm, test_data)
+head(pred_svm)
+table(pred_svm)
+agreement <- pred_svm == test_data$winner
+table(agreement)
+451/(451+84) #0.84 accuracy
+453/(453+82)
 
