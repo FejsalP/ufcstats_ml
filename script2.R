@@ -1,3 +1,5 @@
+rm(list=ls())
+
 # Importing necessarz libraries
 library(dplyr)
 library(caret)
@@ -33,142 +35,130 @@ set.seed(1)
 
 # df$winner <- ifelse(df$winner=='red', 1, 0)
 
+################################################################################
+################################################################################
+################################################################################
+
 # Splitting on training and testing data
 # 80% on training, 20% on test
-length(df$winner) #number of samples in data
-0.8*2675 # = 2140
-sample_ <- sample(2675, 2140)
+sample_ <- sample(length(df$winner), length(df$winner) * 0.8)
 
 training_data <- df[sample_,]
 test_data <- df[-sample_,]
 
-prop.table(table(training_data$winner)) #0.37 blue, 0627 red
-prop.table(table(test_data$winner)) #0.4 blue, 0.6 red
-# Proportion of the target class is almost the same, so we are good to go.
+#checking proportion of target class in training and test data
+prop.table(table(training_data$winner)) 
+prop.table(table(test_data$winner)) 
+
+
+# all features except class attribute
+training_data_without_class <- training_data[-1] 
+# class attribute transformed into factor
+training_data_only_class <- as.factor(training_data$winner)
+
+
+################################################################################
+###############################   FUNCTIONS    #################################
+################################################################################
+
+# function to create confusion matrix and return following metrics: accuracy,
+# sensitivity, specificity
+get_metrics <-function(model_predictions){
+  confusionMatrix <- confusionMatrix(as.factor(model_predictions),
+                                     as.factor(test_data$winner), 
+                                     positive = "red",
+                                     dnn= c("Predicted", "Reference/Actual"))
+  
+  metrics <- c(confusionMatrix$overall['Accuracy'],
+               confusionMatrix$byClass['Sensitivity'],
+               confusionMatrix$byClass['Specificity'])
+  
+  return (metrics)
+}
+
+
+# function used for trainControl summaryFunction. Returning vector
+# with following metrics:
+# twoClassSummary for Sensitivity, ROC and Specificity
+# prSummary for  AUC, Precision, Recall and F
+# defaultSummary Accuracy and Kappa
+mix_summary <- function(data, lev = NULL, model = NULL){
+  output <- c(twoClassSummary(data, lev, model), prSummary(data, lev, model), 
+           defaultSummary(data, lev, model))
+  return (output)
+}
+
+
+get_auc_and_perf <- function (ufc_dtree){
+  # getting AUC values
+  # only second column is needed i.e. probabilities for label 1/red
+  prob_dtree <- predict(ufc_dtree, test_data, type='prob')[,2] # only second column is needed i.e. probabilities for label 1/red
+  pred_dtree <- prediction(prob_dtree, labels = test_data$winner)
+  performance_dtree <- performance(pred_dtree, 'tpr','fpr')
+  #Plotting the ROC Curve for DTree C5.0
+  
+  #Getting the AUC value for DTree C5.0
+  dtree_auc <- performance(pred_dtree, measure='auc')
+  dtree_auc_value <- dtree_auc@y.values #0.8075596 AUC for Dtree
+
+  
+  return (c(dtree_auc_value, performance_dtree))
+}
+
+
+
+################################################################################
+################################      C5.0       ###############################
+################################################################################
 
 # Training the data on the C5.0 decision tree
-x <- training_data[-1] # All features except class.
-y <- as.factor(training_data$winner) 
-ufc_dtree <- C5.0(x, y)
+ufc_dtree <- C5.0(training_data_without_class, training_data_only_class)
 
 # Plotting decision tree
 plot(ufc_dtree)
 
 # Checking attribute usage
-summary(ufc_dtree) # Several attributes can be removed.
-# Control time, Total Strikes, Significant Strikes
-# Significant Strikes Head, Clinch and Ground, Takedowns, 
-# Significant Strikes Head, Body and Ground attempt
-# Total strike attempt
-# 
-
-## Evaluating performance
-
+summary(ufc_dtree)
+        
 # Creating predictions
 ufc_predictions_dtree <- predict(object = ufc_dtree, test_data)
 
-CrossTable(test_data$winner, ufc_predictions_dtree, 
-           prop.chisq = FALSE, dnn=c('Actual', 'Predicted'))
+# Evaluating performance
+dtree_metrics  <- get_metrics(ufc_predictions_dtree)
 
-confusionMatrixDTree <- confusionMatrix(as.factor(ufc_predictions_dtree), 
-                                        as.factor(test_data$winner), 
-                                        positive = "red", 
-                                        dnn= c("Predicted", "Reference/Actual"))
-dtree_metrics <- c(confusionMatrixDTree$overall['Accuracy'], 
-                   confusionMatrixDTree$overall['Kappa'], 
-                   confusionMatrixDTree$byClass['Sensitivity'], 
-                   confusionMatrixDTree$byClass['Specificity'])
+auc_and_perf_dtree <- get_auc_and_perf(ufc_dtree)
+dtree_metrics <- unlist(c(dtree_metrics, "AUC" = auc_and_perf_dtree[[1]]))
 
-#5 Improving the performance of the model
-# Using boosting
+plot(auc_and_perf_dtree[[2]], main='ROC Curve for Dtree')
 
 
-# Random forests
-# x - training data
-# y - factor vector with class for each row in the training data
-length(x)
-ufc_rf <- randomForest(x, y, ntree = 500, mtry = sqrt(length(x)), importance=TRUE)
+################################################################################
+#############################    RANDOM FOREST    ##############################
+################################################################################
 
-ufc_predictions_rf <- predict(ufc_rf, test_data, type='response')
+# creating model
+ufc_rf <- randomForest(training_data_without_class, training_data_only_class,
+                       ntree = 500,
+                       mtry = sqrt(length(training_data_without_class)),
+                       importance=TRUE)
+
+# creating predictions
+ufc_predictions_rf <- predict(ufc_rf, test_data)
 
 # Evaluating performance
+rf_metrics <- get_metrics(ufc_predictions_rf)
 
-# Confusion matrix for Random Forest
-confusionMatrix_rf <- confusionMatrix(as.factor(ufc_predictions_rf), 
-                                      as.factor(test_data$winner), 
-                                      positive = "red", 
-                                      dnn= c("Predicted", "Reference/Actual"))
-confusionMatrix_rf
-rf_metrics <- c(confusionMatrix_rf$overall['Accuracy'], 
-                confusionMatrix_rf$overall['Kappa'], 
-                confusionMatrix_rf$byClass['Sensitivity'], 
-                confusionMatrix_rf$byClass['Specificity'])
+# Getting AUC value and ploting the ROC Curve for Random Forest (from randomForest library)
+prob_rf <- as.vector(ufc_rf$votes[,2]) #probabilites
+pred_rf <- prediction(prob_rf, training_data$winner); #prediction instance
 
-# Cross-validation 10-fold for C5.0 decision tree
+rf_auc <- performance(pred_rf, measure = "auc") # AUC performance
 
 
-#twoClassSummary for Sensitivity, ROC and Specificity
-#prSummary for  AUC, Precision, Recall and F
-#defaultSummary Accuracy and Kappa
+performance_rf <- performance(pred_rf, 'tpr','fpr') #true vs false positive performance
 
-mixSummary <- function(data, lev = NULL, model = NULL){
-  out <- c(twoClassSummary(data, lev, model), prSummary(data, lev, model), defaultSummary(data, lev, model))
-  return (out)
-}
-
-trControl <- trainControl(method='cv',
-                          number = 10,
-                          classProbs = TRUE,
-                          summaryFunction = mixSummary,
-                          savePredictions = TRUE)
-# training_data$winner <- ifelse(training_data$winner==1, 'red', 'blue')
-ufc_dtree_cv_10 <- train (x = training_data[,-1],
-                          y = training_data[,1],
-                          data = training_data, 
-                          method ='C5.0', 
-                          trControl = trControl, 
-                          metric = 'ROC',)
-ufc_dtree_cv_10$results[c('Accuracy', 'AUC', 'Sens', 'Spec')]
-View(ufc_dtree_cv_10)
-
-pred_dtree_cv <- predict(ufc_dtree_cv_10, newdata = test_data)
-pred_dtree_cv
-# test_data$winner <- ifelse(test_data$winner==1, 'red', 'blue')
-confusionMatrix_dtree_cv <- confusionMatrix(as.factor(as.factor(pred_dtree_cv)), 
-                                            as.factor(test_data$winner), 
-                                            positive = "red", 
-                                            dnn= c("Predicted", "Reference/Actual"))
-confusionMatrix_dtree_cv
-dtree_cv_metrics <- c(confusionMatrix_dtree_cv$overall['Accuracy'], 
-                      confusionMatrix_dtree_cv$overall['Kappa'], 
-                      confusionMatrix_dtree_cv$byClass['Sensitivity'], 
-                      confusionMatrix_dtree_cv$byClass['Specificity'])
-
-# Cross-validation 10-fold for random forest
-
-ufc_rf_cv_10 <- train (x = training_data[,-1],
-                       y = training_data[,1],
-                       data = training_data, 
-                       method ='rf', 
-                       trControl = trControl, 
-                       metric = 'ROC',)
-ufc_rf_cv_10$results[c('Accuracy', 'AUC', 'Sens', 'Spec')]
-View(ufc_rf_cv_10)
-
-pred_rf_cv <- predict(ufc_rf_cv_10, newdata = test_data)
-pred_rf_cv
-confusionMatrix_rf_cv <- confusionMatrix(as.factor(as.factor(pred_rf_cv)), 
-                                         as.factor(test_data$winner), 
-                                         positive = "red", 
-                                         dnn= c("Predicted", "Reference/Actual"))
-confusionMatrix_rf_cv
-rf_cv_metrics <- c(confusionMatrix_rf_cv$overall['Accuracy'], 
-                   confusionMatrix_rf_cv$overall['Kappa'], 
-                   confusionMatrix_rf_cv$byClass['Sensitivity'], 
-                   confusionMatrix_rf_cv$byClass['Specificity'])
-
-
-
+plot(performance_rf, main='ROC Curve for RF')
+rf_auc_value <- rf_auc@y.values #AUC value
 
 ################################################################################
 ####################################   KNN   ###################################
@@ -178,121 +168,127 @@ rf_cv_metrics <- c(confusionMatrix_rf_cv$overall['Accuracy'],
 min_max_norm <- function(x){
   ((x-min(x))/(max(x)-min(x)))
 }
+
 #normalizing the data
-ufc_normalized <- as.data.frame(lapply(df[,-1], min_max_norm))
-training_data_knn <- ufc_normalized[sample_, ] #random 2140 rows
-test_data_knn <- ufc_normalized[-sample_, ] # remaining 535 rows that are not in training_set (2675-2140)
-training_label_knn <- df[sample_, 1] #target class for training data
-test_label_knn <- df[-sample_, 1] #target class for test data
+df_normalized <- as.data.frame(lapply(df[,-1], min_max_norm))
+training_data_knn <- df_normalized[sample_, ] 
+test_data_knn <- df_normalized[-sample_, ] 
 
-#training the data on KNN
-sqrt(length(training_data$winner)) #rule of thumb for choosing K
-ufc_knn <- knn(train = training_data_knn, test = test_data_knn, cl = training_label_knn, k = 45, prob=TRUE)
+# training the data on KNN
+# rule of thumb for choosing K is sqrt of data length
+ufc_knn <- knn(train = training_data_knn, 
+               test = test_data_knn, 
+               cl = training_data_only_class, 
+               k = sqrt(length(training_data$winner)), 
+               prob=TRUE)
 
-confusionMatrix_knn <-confusionMatrix(as.factor(ufc_knn),
-                                      as.factor(test_label_knn),
-                                      positive='red',
-                                      dnn= c("Predicted", "Reference/Actual"))
 
-knn_metrics <- c(confusionMatrix_knn$overall['Accuracy'], 
-                 confusionMatrix_knn$overall['Kappa'], 
-                 confusionMatrix_knn$byClass['Sensitivity'], 
-                 confusionMatrix_knn$byClass['Specificity'])
+# Evaluating performance
+knn_metrics <- get_metrics(ufc_knn)
 
-str(training_data)
-training_data_test <- training_data
-str(training_data_test)
-training_data_test$winner <- as.factor(training_data_test$winner)
+## Getting AUC value for and plotting the ROC Curve for KNN (from class library)
+prob_knn <- attr(ufc_knn, 'prob')
+prob_knn <- 2*ifelse(ufc_knn == '-1', 1-prob_knn, prob_knn) - 1
+pred_knn <- prediction(prob_knn, test_data$winner)
+performance_knn <- performance(pred_knn, 'tpr','fpr')
+
+#Plotting the ROC Curve for KNN
+plot(performance_knn, avg='threshold', lwd=3, main='ROC Curve for KNN')
+
+#Getting the AUC value for KNN
+knn_auc <- performance(pred_knn, measure='auc')
+str(knn_auc) #0.6926078 AUC for KNN
+knn_auc_value <- knn_auc@y.values 
+
+knn_metrics <- unlist(c(knn_metrics, 'AUC' = knn_auc_value))
+
+################################################################################
+###############################   10-FOLD CV    ################################
+################################################################################
+
+# creating set of configuration options for train() function
+train_control_cv <- trainControl(method='cv',
+                                 number = 10,
+                                 classProbs = TRUE,
+                                 summaryFunction = mix_summary,
+                                 savePredictions = TRUE)
+
+################################################################################
+#############################   10-FOLD CV C5.0    #############################
+################################################################################
+
+# creating C5.0 model with 10-fold cross validation
+ufc_dtree_cv_10 <- train (training_data_without_class,
+                          training_data_only_class,
+                          data = training_data, 
+                          method ='C5.0', 
+                          trControl = train_control_cv, 
+                          metric = 'ROC')
+
+# creating predictions  
+pred_dtree_cv <- predict(ufc_dtree_cv_10, test_data)
+
+# Evaluating performance
+dtree_cv_metrics <- get_metrics(pred_dtree_cv)
+
+################################################################################
+#########################   10-FOLD CV RANDOM FOREST   #########################
+################################################################################
+
+# creating RF model with 10-fold cross validation
+ufc_rf_cv_10 <- train (training_data_without_class,
+                       training_data_only_class,
+                       data = training_data, 
+                       method ='rf', 
+                       trControl = train_control_cv, 
+                       metric = 'ROC')
+
+# creating predictions  
+pred_rf_cv <- predict(ufc_rf_cv_10, newdata = test_data)
+
+# Evaluating performance
+rf_cv_metrics <- get_metrics(pred_rf_cv)
+
+################################################################################
+##############################   10 FOLD CV KNN   ##############################
+################################################################################
+
 ufc_knn_cv_10 <- train (winner ~ .,
                         data = training_data, 
                         method ="knn", 
-                        trControl = trControl, 
+                        trControl = train_control_cv, 
                         preProcess = c("center", "scale"),
                         tuneGrid = expand.grid(k = 1:50),
-                        metric = 'Accuracy')
-#Final value for k is 35
-ufc_knn_cv_10$results[c('Accuracy', 'AUC', 'Sens', 'Spec')][35,] # Gets performance metrics when K=50
+                        metric = 'ROC')
+plot(ufc_knn_cv_10)
 
 
-pred_knn_cv <- predict(ufc_knn_cv_10, newdata = test_data)
+# creating predictions
+pred_knn_cv <- predict(ufc_knn_cv_10, test_data)
 
-confusionMatrix_knn_cv <- confusionMatrix(as.factor(as.factor(pred_knn_cv)), 
-                                          as.factor(test_data$winner), 
-                                          positive = "red", 
-                                          dnn= c("Predicted", "Reference/Actual"))
-
-knn_cv_metrics <- c(confusionMatrix_knn_cv$overall['Accuracy'], 
-                    confusionMatrix_knn_cv$overall['Kappa'], 
-                    confusionMatrix_knn_cv$byClass['Sensitivity'], 
-                    confusionMatrix_knn_cv$byClass['Specificity'])
+# evaluating preformance
+knn_cv_metrics <- get_metrics(pred_knn_cv)
 
 
-all_metrics <- data.frame(dtree_metrics, rf_metrics, dtree_cv_metrics, rf_cv_metrics, knn_metrics, knn_cv_metrics)
-all_metrics # Increase in all 4 metrics after CV or RandomForests
-# RF with 10CV takes ~10x more time to process and still delivers the same result
+##############################     ALL METRICS    ##############################
+all_metrics <- data.frame(dtree_metrics, rf_metrics, dtree_cv_metrics,
+                          rf_cv_metrics, knn_metrics, knn_cv_metrics)
+
+
+
 
 #Plotting ROC curves for models with cross-validation (Decision tree, random forest and KNN) 
 roc_curves <- evalm(list(ufc_dtree_cv_10, ufc_rf_cv_10, ufc_knn_cv_10),gnames=c('DTree CV10','RF CV10', 'KNN CV10'))
 # AUC for DTree CV 10 = 0.9 roc_curves$stdres$`DTree CV10`$Score[13]
 # AUC for RF CV 10 = 0.91 roc_curves$stdres$`RF CV10`$Score[13]
 # AUC for KNN CV 10 = 0.88 roc_curves$stdres$`DTree CV10`$Score[13]
-knn_cv_10_roc <- evalm(ufc_knn_cv_10, gnames='KNN CV10')
 
-# test1 <- evalm(ufc_dtree_cv_10,plots='r',rlinethick=0.8,fsize=8)
-# test2 <- evalm(ufc_rf_cv_10,plots='r',rlinethick=0.8,fsize=8)
 
-## Getting AUC value for and plotting the ROC Curve for KNN (from class library)
 
-prob_knn <- attr(ufc_knn, 'prob')
-prob_knn <- 2*ifelse(ufc_knn == '-1', 1-prob, prob) - 1
-pred_knn <- prediction(prob_knn, test_label_knn)
-performance_knn <- performance(pred_knn, 'tpr','fpr')
 
-#Plotting the ROC Curve for KNN
-plot(performance_knn, avg='threshold',colorize=TRUE, lwd=3, main='ROC Curve')
 
-#Getting the AUC value for KNN
-knn_auc <- performance(pred_knn, measure='auc')
-str(knn_auc)
-knn_auc_value <- knn_auc@y.values #0.6926078 AUC for KNN
 
-## Getting AUC value for and plotting the ROC Curve for C5.0 Decision Tree (from C5.0 library)
 
-prob_dtree <- predict(ufc_dtree, test_data, type='prob')[,2] # only second column is needed i.e. probabilities for label 1/red
-pred_dtree <- prediction(prob_dtree, labels = test_data$winner)
-performance_dtree <- performance(pred_dtree, 'tpr','fpr')
-#Plotting the ROC Curve for DTree C5.0
-plot(performance_dtree, main='ROC Curve for Dtree')
-
-#Getting the AUC value for DTree C5.0
-dtree_auc <- performance(pred_dtree, measure='auc')
-dtree_auc_value <- dtree_auc@y.values #0.8075596 AUC for Dtree
-dtree_auc_value #0.8075596
-
-# Getting AUC value and ploting the ROC Curve for Random Forest (from randomForest library)
-prob_rf <- as.vector(ufc_rf$votes[,2]) #probabilites
-pred_rf <- prediction(prob_rf, training_data$winner); #prediction instance
-
-rf_auc <- performance(pred_rf, measure = "auc") # AUC performance
-rf_auc_value <- rf_auc@y.values #AUC value
-rf_auc_value
-performance_rf <- performance(pred_rf, 'tpr','fpr') #true vs false positive performance
-plot(performance_rf, main='ROC Curve for RF')
-
-############################
-########### SVM ############
-############################
-
-library(kernlab)
-
-ufc_svm <- ksvm(winner ~ ., data = training_data_test, kernel='rbfdot')
-pred_svm <- predict(ufc_svm, test_data)
-head(pred_svm)
-table(pred_svm)
-agreement <- pred_svm == test_data$winner
-table(agreement)
-451/(451+84) #0.84 accuracy
-453/(453+82)
 
 
 ##################################################################################
@@ -301,32 +297,14 @@ table(agreement)
 
 # Creating C5.0 decision trees with specified trials and returning the predictions
 dtree_creation <- function(trials){
-  ufc_dtree_model <- C5.0(x, y, trials = trials)
+  ufc_dtree_model <- C5.0(training_data_without_class, training_data_only_class, trials = trials)
   ufc_predictions_for_model <- predict(object=ufc_dtree_model, test_data)
   return (list(ufc_dtree_model, ufc_predictions_for_model))
 }
-# Getting metrics - accuracy, sensitivity, specificity
-get_metrics <-function(ufc_predictions_for_model){
-  confusionMatrixDtree_for_model <- confusionMatrix(as.factor(ufc_predictions_for_model), 
-                                                    as.factor(test_data$winner), 
-                                                    positive = "red", 
-                                                    dnn= c("Predicted", "Reference/Actual"))
-  accuracy <- confusionMatrixDtree_for_model$overall['Accuracy']
-  sensitivity <- confusionMatrixDtree_for_model$byClass['Sensitivity']
-  specificity <- confusionMatrixDtree_for_model$byClass['Specificity']
-  metrics <- c(accuracy, sensitivity, specificity)
-  return (metrics)
-}
+
 
 # Getting AUC for given decision tree
-get_auc <- function (ufc_dtree_model){
-  # getting AUC values
-  prob_dtree <- predict(ufc_dtree_model, test_data, type='prob')[,2] # only second column is needed i.e. probabilities for label 1/red
-  pred_dtree <- prediction(prob_dtree, labels = test_data$winner)
-  dtree_auc_for_model <- performance(pred_dtree, measure='auc')
-  dtree_auc_value_for_model <- dtree_auc_for_model@y.values
-  return (dtree_auc_value_for_model)
-}
+
 dtree_models_and_predictions <- lapply(seq(1,20), dtree_creation) #creating 20 C5.0 decision trees
 
 #Separating models and predictions
@@ -346,7 +324,7 @@ all_metrics_dtree <- cbind(metrics_for_dtree_per_trial, auc_for_dtrees_df)
 all_metrics_dtree # with trials=20 we have the overall best result (best AUC, accuracy and sensitivity )
 max(all_metrics_dtree[,4]) #AUC = 0.8973
 #Creating model with trials = 20
-ufc_dtree_20 <- C5.0(x, y, trials=20)
+ufc_dtree_20 <- C5.0(training_data_without_class, training_data_only_class, trials=20)
 
 #Plotting the ROC Curve
 
@@ -362,15 +340,13 @@ plot(performance_dtree_20, main='ROC Curve for Decision tree')
 
 # Creating random forests with specified trials and returning the predictions
 rf_creation <- function(number_of_trees, number_of_features){
-  ufc_rf_model <- randomForest(x, y, ntree = number_of_trees, mtry = number_of_features, importance=TRUE)
+  ufc_rf_model <- randomForest(training_data_without_class, training_data_only_class, ntree = number_of_trees, mtry = number_of_features, importance=TRUE)
   ufc_predictions_for_model <- predict(ufc_rf_model, test_data, type='response')
   return (list(ufc_rf_model, ufc_predictions_for_model))
 }
 
 # Creating random forest with default parameters
-#
-length(sqrt(x))
-ufc_rf_default <- randomForest(x, y, ntree = 500, mtry = length(sqrt(x)))
+ufc_rf_default <- randomForest(training_data_without_class, training_data_only_class, ntree = 500, mtry = length(sqrt(training_data_without_class)))
 ufc_rf_default_predictions <- predict(ufc_rf_default, test_data, type='response')
 
 ### importance, varImp()..
@@ -378,7 +354,7 @@ ufc_rf_default_predictions <- predict(ufc_rf_default, test_data, type='response'
 ##
 ##
 number_of_trees <- seq(100,1000,100)
-number_of_features <- c(sqrt(length(x)), 10, 15, 20)
+number_of_features <- c(sqrt(length(training_data_without_class)), 10, 15, 20)
 combinations <- expand.grid(number_of_trees, number_of_features) #all possible combinations of given number of trees and features
 n_of_trees <- combinations$Var1
 n_of_features <- combinations$Var2
@@ -406,7 +382,7 @@ all_metrics_rf
 max(all_metrics_rf[,4]) # AUC = 0.926
 
 #Creating random forest with these hyperparameters
-ufc_rf_final <- randomForest(x, y, ntree = 700, mtry = 10)
+ufc_rf_final <- randomForest(training_data_without_class, training_data_only_class, ntree = 700, mtry = 10)
 ufc_rf_final_predictions <- predict(ufc_rf_final, test_data, type='response')
 
 #Plotting the ROC Curve
