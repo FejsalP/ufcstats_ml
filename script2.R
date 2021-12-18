@@ -85,7 +85,9 @@ get_metrics <-function(model_predictions){
 mix_summary <- function(data, lev = NULL, model = NULL){
   output <- c(twoClassSummary(data, lev, model), prSummary(data, lev, model), 
            defaultSummary(data, lev, model))
-  return (output)
+  # return (list(output[["AUC"]], output[["ROC"]], output[["Sens"]],
+  #              output[["Spec"]], output[["Accuracy"]]))
+  return(output)
 }
 
 # Getting the AUC value and performance object 
@@ -355,8 +357,9 @@ train_control_repeated_cv <- trainControl(method='repeatedcv',
                                           classProbs = TRUE,
                                           summaryFunction = mix_summary,
                                           savePredictions = TRUE)
+
 train_control_bootstrap <- trainControl(method='boot',
-                                        number = 15,
+                                        number = 20,
                                         classProbs = TRUE,
                                         summaryFunction = mix_summary,
                                         savePredictions = TRUE)
@@ -383,70 +386,118 @@ train_c50 <- function(train_control_obj) {
   
   prediction <- predict(model, test_data)
   
-  evalm_obj <- evalm(model,gnames=c('model'), 
-                     silent = TRUE, 
-                     showplots = FALSE)
+  auc_and_performance <-get_auc_and_perf(model)
   
-  metrics <- c(get_metrics(prediction),
-               "AUC" = evalm_obj$stdres$`model`$Score[13])
+  metrics <- c(get_metrics(prediction), 'AUC' = auc_and_performance[[1]])
   
-  return(list(model, metrics))
+  return(list(metrics, auc_and_performance[[2]]))
 }
 
 # Using cross validation
 ufc_dtree_cv_10 <- train_c50(train_control_cv)
 
 # Evaluating performance
-dtree_cv_metrics <- ufc_dtree_cv_10[[2]]
+dtree_cv_metrics <- ufc_dtree_cv_10[[1]]
+
+plot(ufc_dtree_cv_10[[2]])
 
 # Using repeated cross validation
 ufc_dtree_repeated_cv <- train_c50(train_control_repeated_cv)
 
 # Evaluating performance
-dtree_repeated_cv_metrics <- ufc_dtree_repeated_cv[[2]]
+dtree_repeated_cv_metrics <- ufc_dtree_repeated_cv[[1]]
 
 # Using bootstrap
 ufc_dtree_boot <- train_c50(train_control_bootstrap)
 
 # Evaluating performance
-dtree_boot_metrics <- ufc_dtree_boot[[2]]
+dtree_boot_metrics <- ufc_dtree_boot[[1]]
 
 ################################################################################
-#########################   10-FOLD CV RANDOM FOREST   #########################
+############    RANDOM FOREST WITH DIFFERENT RESAMPLING METHODS   ##############
 ################################################################################
 
-# creating RF model with 10-fold cross validation
-ufc_rf_cv_10 <- train (training_data_without_class,
-                       training_data_only_class,
-                       data = training_data, 
-                       method ='rf', 
-                       trControl = train_control_cv, 
-                       metric = 'ROC')
+train_rf <- function(train_control_obj) {
+  model <- train (training_data_without_class,
+                  training_data_only_class,
+                  data = training_data, 
+                  method ='rf', 
+                  tuneGrid= expand.grid(.mtry=10), 
+                  trControl = train_control_obj, 
+                  metric = 'ROC')
+  
+  prediction <- predict(model, test_data)
+  
+  auc_and_performance <-get_auc_and_perf(model)
+  
+  metrics <- c(get_metrics(prediction), 'AUC' = auc_and_performance[[1]])
+  
+  return(list(metrics, auc_and_performance[[2]]))
+}
 
-# creating predictions  
-pred_rf_cv <- predict(ufc_rf_cv_10, test_data)
+# Using cross validation
+ufc_rf_cv_10 <- train_rf(train_control_cv)
 
 # Evaluating performance
-rf_cv_metrics <- get_metrics(pred_rf_cv)
+rf_cv_metrics <- ufc_rf_cv_10[[1]]
+
+plot(ufc_rf_cv_10[[2]])
+
+# Using repeated cross validation
+ufc_rf_repeated_cv <- train_rf(train_control_repeated_cv)
+
+# Evaluating performance
+rf_repeated_cv_metrics <- ufc_rf_repeated_cv[[1]]
+
+# Using bootstrap
+ufc_rf_boot <- train_rf(train_control_bootstrap)
+
+# Evaluating performance
+rf_boot_metrics <- ufc_rf_boot[[1]]
 
 ################################################################################
 ##############################   10 FOLD CV KNN   ##############################
 ################################################################################
 
-ufc_knn_cv_10 <- train (winner ~ .,
-                        data = training_data, 
-                        method ="knn", 
-                        trControl = train_control_cv, 
-                        preProcess = c("center", "scale"),
-                        tuneGrid = expand.grid(k = 1:50),
-                        metric = 'ROC')
-plot(ufc_knn_cv_10)
+train_knn <- function(train_control_obj) {
 
-# creating predictions
-pred_knn_cv <- predict(ufc_knn_cv_10, test_data)
+  model <-  train (winner ~ .,
+                   data = training_data, 
+                   method ="knn", 
+                   trControl = train_control_obj, 
+                   preProcess = c("center", "scale"),
+                   tuneGrid = expand.grid(k = seq(3, 47, 2)),
+                   metric = 'ROC')
+  
+  prediction <- predict(model, test_data)
+  
+  auc_and_performance <-get_auc_and_perf(model)
+  
+  metrics <- c(get_metrics(prediction), 'AUC' = auc_and_performance[[1]])
+  
+  return(list(metrics, performance_knn))
+}
 
-# evaluating preformance
-knn_cv_metrics <- get_metrics(pred_knn_cv)
+
+# Using cross validation
+ufc_knn_cv_10 <- train_knn(train_control_cv)
+
+# Evaluating performance
+knn_cv_metrics <- ufc_knn_cv_10[[1]]
+
+plot(ufc_knn_cv_10[[2]])
+
+# Using repeated cross validation
+ufc_knn_repeated_cv <- train_knn(train_control_repeated_cv)
+
+# Evaluating performance
+knn_repeated_cv_metrics <- ufc_knn_repeated_cv[[1]]
+
+# Using bootstrap
+ufc_knn_boot <- train_knn(train_control_bootstrap)
+
+# Evaluating performance
+knn_boot_metrics <- ufc_knn_boot[[1]]
 
 
 
