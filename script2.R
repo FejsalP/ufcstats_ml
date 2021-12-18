@@ -372,7 +372,7 @@ train_control_LOOCV <- trainControl(method='LOOCV',
 ################################################################################
 
 train_c50 <- function(train_control_obj) {
-
+  
   # creating C5.0 model 
   model <- train (training_data_without_class,
                   training_data_only_class,
@@ -383,19 +383,33 @@ train_c50 <- function(train_control_obj) {
   
   prediction <- predict(model, test_data)
   
-  evalm_obj <- evalm(model,gnames=c('model'), silent = TRUE, showplots = FALSE)
+  evalm_obj <- evalm(model,gnames=c('model'), 
+                     silent = TRUE, 
+                     showplots = FALSE)
   
-  metrics <- unlist(c(get_metrics(prediction),
-                      "AUC" = evalm_obj$stdres$`model`$Score[13]))
+  metrics <- c(get_metrics(prediction),
+               "AUC" = evalm_obj$stdres$`model`$Score[13])
   
-  return(c(model, metrics))
+  return(list(model, metrics))
 }
 
-
+# Using cross validation
 ufc_dtree_cv_10 <- train_c50(train_control_cv)
 
 # Evaluating performance
-dtree_cv_metrics <- get_metrics(pred_dtree_cv)
+dtree_cv_metrics <- ufc_dtree_cv_10[[2]]
+
+# Using repeated cross validation
+ufc_dtree_repeated_cv <- train_c50(train_control_repeated_cv)
+
+# Evaluating performance
+dtree_repeated_cv_metrics <- ufc_dtree_repeated_cv[[2]]
+
+# Using bootstrap
+ufc_dtree_boot <- train_c50(train_control_bootstrap)
+
+# Evaluating performance
+dtree_boot_metrics <- ufc_dtree_boot[[2]]
 
 ################################################################################
 #########################   10-FOLD CV RANDOM FOREST   #########################
