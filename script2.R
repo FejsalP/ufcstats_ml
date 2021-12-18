@@ -104,6 +104,15 @@ get_auc_and_perf <- function (model){
   return (c(auc_value, performance_))
 }
 
+get_auc <- function (ufc_dtree_model){
+  # getting AUC values
+  prob_dtree <- predict(ufc_dtree_model, test_data, type='prob')[,2] # only second column is needed i.e. probabilities for label 1/red
+  pred_dtree <- prediction(prob_dtree, labels = test_data$winner)
+  dtree_auc_for_model <- performance(pred_dtree, measure='auc')
+  dtree_auc_value_for_model <- dtree_auc_for_model@y.values
+  return (dtree_auc_value_for_model)
+}
+
 
 ################################################################################
 ################################      C5.0       ###############################
@@ -173,8 +182,7 @@ rownames(auc_for_dtrees_df) <- 1:20
 #Merging two dataframes
 all_metrics_dtree <- cbind(metrics_for_dtree_per_trial, auc_for_dtrees_df)
 # with trials=20 we have the overall best result 
-# (best AUC, accuracy and sensitivity )
-max(all_metrics_dtree[,4]) #AUC = 0.8973
+max(all_metrics_dtree[,4]) 
 
 #Creating model with trials = 20
 ufc_dtree_20 <- C5.0(training_data_without_class, 
@@ -278,12 +286,12 @@ all_metrics_rf <- cbind(metrics_for_rf_per_trial, auc_for_rf_df)
 
 # we picked the one with highest AUC = index 17 
 # ntree = 700, mtry = 10
-max(all_metrics_rf[,4]) # AUC = 0.926
+max(all_metrics_rf[,4]) 
 
 #Creating random forest with these hyperparameters
 ufc_rf_final <- randomForest(training_data_without_class, 
                              training_data_only_class, 
-                             ntree = 700, mtry = 10)
+                             ntree = 300, mtry = 15)
 
 # Creating predictions
 ufc_rf_final_predictions <- predict(ufc_rf_final, test_data)
@@ -523,9 +531,12 @@ knn_cv_metrics <-  unlist(c(knn_cv_metrics,
 
 ##############################     ALL METRICS    ##############################
 
-all_metrics <- data.frame(dtree_metrics, rf_metrics, dtree_cv_metrics,
-                          rf_cv_metrics, knn_metrics, knn_cv_metrics) 
-                          #rf_final_metrics, dtree_20_metrics)
+all_metrics <- data.frame(dtree_metrics, dtree_20_metrics, dtree_cv_metrics,
+                          dtree_repeated_cv_metrics, dtree_boot_metrics,
+                          rf_metrics, rf_final_metrics, rf_cv_metrics, 
+                          rf_repeated_cv_metrics, rf_boot_metrics, 
+                          knn_metrics, knn_cv_metrics, knn_repeated_cv_metrics,
+                          knn_boot_metrics)
 
 
 # Checking the importane of features for random forest
