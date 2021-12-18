@@ -88,23 +88,19 @@ mix_summary <- function(data, lev = NULL, model = NULL){
   return (output)
 }
 
-
-get_auc_and_perf <- function (ufc_dtree){
-  # getting AUC values
+# Getting the AUC value and performance object 
+# that is required for plotting the ROC curve
+get_auc_and_perf <- function (model){
   # only second column is needed i.e. probabilities for label 1/red
-  prob_dtree <- predict(ufc_dtree, test_data, type='prob')[,2] # only second column is needed i.e. probabilities for label 1/red
-  pred_dtree <- prediction(prob_dtree, labels = test_data$winner)
-  performance_dtree <- performance(pred_dtree, 'tpr','fpr')
-  #Plotting the ROC Curve for DTree C5.0
-  
-  #Getting the AUC value for DTree C5.0
-  dtree_auc <- performance(pred_dtree, measure='auc')
-  dtree_auc_value <- dtree_auc@y.values #0.8075596 AUC for Dtree
+  probabilities <- predict(model, test_data, type='prob')[,2] # only second column is needed i.e. probabilities for label 1/red
+  predictions <- prediction(probabilities, labels = test_data$winner)
+  performance_dtree <- performance(predictions, 'tpr','fpr')
 
-  
+    dtree_auc <- performance(predictions, measure='auc')
+  dtree_auc_value <- dtree_auc@y.values
+
   return (c(dtree_auc_value, performance_dtree))
 }
-
 
 
 ################################################################################
@@ -148,17 +144,10 @@ ufc_predictions_rf <- predict(ufc_rf, test_data)
 # Evaluating performance
 rf_metrics <- get_metrics(ufc_predictions_rf)
 
-# Getting AUC value and ploting the ROC Curve for Random Forest (from randomForest library)
-prob_rf <- as.vector(ufc_rf$votes[,2]) #probabilites
-pred_rf <- prediction(prob_rf, training_data$winner); #prediction instance
+auc_and_perf_rf <- get_auc_and_perf(ufc_rf)
+rf_metrics <- unlist(c(rf_metrics, "AUC" = auc_and_perf_rf[[1]]))
 
-rf_auc <- performance(pred_rf, measure = "auc") # AUC performance
-
-
-performance_rf <- performance(pred_rf, 'tpr','fpr') #true vs false positive performance
-
-plot(performance_rf, main='ROC Curve for RF')
-rf_auc_value <- rf_auc@y.values #AUC value
+plot(auc_and_perf_rf[[2]], main='ROC Curve for RF')
 
 ################################################################################
 ####################################   KNN   ###################################
@@ -244,7 +233,7 @@ ufc_rf_cv_10 <- train (training_data_without_class,
                        metric = 'ROC')
 
 # creating predictions  
-pred_rf_cv <- predict(ufc_rf_cv_10, newdata = test_data)
+pred_rf_cv <- predict(ufc_rf_cv_10, test_data)
 
 # Evaluating performance
 rf_cv_metrics <- get_metrics(pred_rf_cv)
@@ -262,34 +251,29 @@ ufc_knn_cv_10 <- train (winner ~ .,
                         metric = 'ROC')
 plot(ufc_knn_cv_10)
 
-
 # creating predictions
 pred_knn_cv <- predict(ufc_knn_cv_10, test_data)
 
 # evaluating preformance
 knn_cv_metrics <- get_metrics(pred_knn_cv)
 
-
-##############################     ALL METRICS    ##############################
-all_metrics <- data.frame(dtree_metrics, rf_metrics, dtree_cv_metrics,
-                          rf_cv_metrics, knn_metrics, knn_cv_metrics)
-
-
-
-
-#Plotting ROC curves for models with cross-validation (Decision tree, random forest and KNN) 
+############## ROC Curves for models with cross validation
 roc_curves <- evalm(list(ufc_dtree_cv_10, ufc_rf_cv_10, ufc_knn_cv_10),gnames=c('DTree CV10','RF CV10', 'KNN CV10'))
 # AUC for DTree CV 10 = 0.9 roc_curves$stdres$`DTree CV10`$Score[13]
 # AUC for RF CV 10 = 0.91 roc_curves$stdres$`RF CV10`$Score[13]
 # AUC for KNN CV 10 = 0.88 roc_curves$stdres$`DTree CV10`$Score[13]
+#roc curve
+roc_curves$roc
+dtree_cv_metrics <-  unlist(c(dtree_cv_metrics, "AUC" = roc_curves$stdres$`DTree CV10`$Score[13]))
+rf_cv_metrics <-  unlist(c(rf_cv_metrics, "AUC" = roc_curves$stdres$`RF CV10`$Score[13]))
+knn_cv_metrics <-  unlist(c(knn_cv_metrics, "AUC" = roc_curves$stdres$`DTree CV10`$Score[13]))
 
 
+##############################     ALL METRICS    ##############################
 
-
-
-
-
-
+all_metrics <- data.frame(dtree_metrics, rf_metrics, dtree_cv_metrics,
+                          rf_cv_metrics, knn_metrics, knn_cv_metrics, 
+                          rf_final_metrics, dtree_20_metrics)
 
 ##################################################################################
 ############################### C5.0 Decision Tree ###############################
@@ -301,7 +285,6 @@ dtree_creation <- function(trials){
   ufc_predictions_for_model <- predict(object=ufc_dtree_model, test_data)
   return (list(ufc_dtree_model, ufc_predictions_for_model))
 }
-
 
 # Getting AUC for given decision tree
 
@@ -326,13 +309,20 @@ max(all_metrics_dtree[,4]) #AUC = 0.8973
 #Creating model with trials = 20
 ufc_dtree_20 <- C5.0(training_data_without_class, training_data_only_class, trials=20)
 
-#Plotting the ROC Curve
+#evaluating performance
+plot(ufc_dtree_20)
+# Checking attribute usage
+summary(ufc_dtree_20)
+# Creating predictions
+ufc_predictions_dtree_20 <- predict(ufc_dtree_20, test_data)
 
-prob_dtree_20 <- predict(ufc_dtree_20, test_data, type='prob')[,2] # only second column is needed i.e. probabilities for label 1/red
-pred_dtree_20 <- prediction(prob_dtree_20, labels = test_data$winner)
-performance_dtree_20 <- performance(pred_dtree_20, 'tpr','fpr')
-plot(performance_dtree_20, main='ROC Curve for Decision tree')
+# Evaluating performance
+dtree_20_metrics  <- get_metrics(ufc_predictions_dtree_20)
 
+auc_and_perf_dtree_20 <- get_auc_and_perf(ufc_dtree_20)
+dtree_20_metrics <- unlist(c(dtree_20_metrics, "AUC" = auc_and_perf_dtree_20[[1]]))
+
+plot(auc_and_perf_dtree_20[[2]], main='ROC Curve for Dtree with trials = 20')
 
 ##################################################################################
 ################################## Random Forest #################################
@@ -383,13 +373,17 @@ max(all_metrics_rf[,4]) # AUC = 0.926
 
 #Creating random forest with these hyperparameters
 ufc_rf_final <- randomForest(training_data_without_class, training_data_only_class, ntree = 700, mtry = 10)
+
+# Creating predictions
 ufc_rf_final_predictions <- predict(ufc_rf_final, test_data, type='response')
 
-#Plotting the ROC Curve
-prob_rf <- as.vector(ufc_rf$votes[,2]) #probabilites
-pred_rf <- prediction(prob_rf, training_data$winner); #prediction instance
-performance_rf <- performance(pred_rf, 'tpr','fpr') #true vs false positive performance
-plot(performance_rf, main='ROC Curve for Random forests')
+# Evaluating performance
+rf_final_metrics <- get_metrics(ufc_rf_final_predictions)
+
+auc_and_perf_rf_final <- get_auc_and_perf(ufc_rf_final)
+rf_final_metrics <- unlist(c(rf_final_metrics, "AUC" = auc_and_perf_rf_final[[1]]))
+
+plot(auc_and_perf_rf_final[[2]], main='ROC Curve for RF')
 
 # Checking the importane of features for random forest
 varImp(ufc_rf_final)
@@ -412,11 +406,28 @@ varImp(ufc_rf_final)
 # red_sig_str_head_rnd_3    
 # 16*2 = 32 features?
 
+# creating set of configuration options for train() function
+train_control_cv <- trainControl(method='cv',
+                                 number = 10,
+                                 classProbs = TRUE,
+                                 summaryFunction = mix_summary,
+                                 savePredictions = TRUE)
 
-####### za sutra
-## predictions za RF i C50 na test data - napravit predictions i confusionmatrix
-## traincontrol - bootstrap i repeatedcv
-## napravit roc curves za sve modele
-## sve metrics u jednu tabelu
-## komentarisati
-## pobrisati varijable koje se ne koriste
+train_control_repeated_cv <- trainControl(method='repeatedcv',
+                                          number = 3,
+                                          repeats = 4,
+                                          classProbs = TRUE,
+                                          summaryFunction = mix_summary,
+                                          savePredictions = TRUE)
+train_control_bootstrap <- trainControl(method='boot',
+                                          number = 15,
+                                          classProbs = TRUE,
+                                          summaryFunction = mix_summary,
+                                          savePredictions = TRUE)
+
+# Will be used for the final model with optimized hyperparameters
+train_control_LOOCV <- trainControl(method='LOOCV',
+                                    classProbs = TRUE,
+                                    summaryFunction = mix_summary,
+                                    savePredictions = TRUE)
+
