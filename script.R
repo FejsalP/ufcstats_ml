@@ -386,16 +386,22 @@ clean_df <- clean_df[, -c(56:79)]
 write.csv(clean_df, 'ufcstats_cleaned.csv', row.names = FALSE)
 
 
+df3 <- clean_df
 
+new_df <- as.data.frame(df3$winner, col.names=names(df3$winner))
+colnames(new_df) <- c('winner')
 
+all_columns <- colnames(df3)
 
+red_columns <- all_columns[grepl('^red_*', all_columns)]
 
+for (red_col in red_columns) {
+  new_col_name <- strsplit(red_col, split='red_')[[1]][2]
+  blue_col <- paste0('blue_', new_col_name)
+  new_df[new_col_name] <- df3[red_col] - df3[blue_col]
+}
 
-
-
-
-
-
+write.csv(new_df, 'ufcstats_cleaned2.csv', row.names = FALSE)
 
 
 
