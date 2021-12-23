@@ -1,6 +1,6 @@
 rm(list=ls())
 
-# Importing necessarz libraries
+# Importing necessary libraries
 library(dplyr)
 library(caret)
 library(C50)
@@ -17,23 +17,6 @@ df <- read.csv("ufcstats_cleaned.csv", header = TRUE, sep = ",")
 
 str(df) 
 set.seed(1)
-
-#Boxplots
-
-# control_times <- select(df, c(ctrl_time_rnd_1, ctrl_time_rnd_2, ctrl_time_rnd_3))
-# boxplot(control_times)
-# 
-# boxplot(winner ~ ctrl_time_rnd_1, data=df, xlab='Time', ylab='Winner')
-# # Merging red and blue columns
-# df <- df %>% mutate (kd_rnd_1 = red_kd_rnd_1 - blue_kd_rnd_1)
-# df <- df %>% mutate (sig_str_rnd_1 = red_sig_str_rnd_1 - blue_sig_str_rnd_1)
-# df <- df %>% mutate (ctrl_time_rnd_1 = red_ctrl_time_rnd_1 - blue_ctrl_time_rnd_1)
-# df <- df %>% mutate (ctrl_time_rnd_2 = red_ctrl_time_rnd_2 - blue_ctrl_time_rnd_2)
-# df <- df %>% mutate (ctrl_time_rnd_3 = red_ctrl_time_rnd_3 - blue_ctrl_time_rnd_3)
-# 
-# # ..
-
-# df$winner <- ifelse(df$winner=='red', 1, 0)
 
 ################################################################################
 ################################################################################
@@ -133,7 +116,9 @@ ufc_predictions_dtree <- predict(object = ufc_dtree, test_data)
 # Evaluating performance
 dtree_metrics  <- get_metrics(ufc_predictions_dtree)
 
+# Getting AUC and performance model needed for plotting the ROC curve
 auc_and_perf_dtree <- get_auc_and_perf(ufc_dtree)
+
 dtree_metrics <- unlist(c(dtree_metrics, "AUC" = auc_and_perf_dtree[[1]]))
 
 plot(auc_and_perf_dtree[[2]], main='ROC Curve for Dtree')
@@ -181,40 +166,43 @@ rownames(auc_for_dtrees_df) <- 1:20
 
 #Merging two dataframes
 all_metrics_dtree <- cbind(metrics_for_dtree_per_trial, auc_for_dtrees_df)
-# with trials=20 we have the overall best result 
-max(all_metrics_dtree[,4]) 
 
-#Creating model with trials = 20
-ufc_dtree_20 <- C5.0(training_data_without_class, 
+# getting the number of trials that produces the maximum AUC
+highest_auc_index_dtree <- which(all_metrics_dtree$AUC==max(all_metrics_dtree[,4]))
+
+#Creating model with the trials that had maximum AUC
+ufc_dtree_final <- C5.0(training_data_without_class, 
                      training_data_only_class, 
-                     trials=20)
-
-#evaluating performance
-plot(ufc_dtree_20)
-
-# Checking attribute usage
-summary(ufc_dtree_20)
-
-# Creating predictions
-ufc_predictions_dtree_20 <- predict(ufc_dtree_20, test_data)
+                     trials=highest_auc_index_dtree)
 
 # Evaluating performance
-dtree_20_metrics  <- get_metrics(ufc_predictions_dtree_20)
+plot(ufc_dtree_final)
 
-auc_and_perf_dtree_20 <- get_auc_and_perf(ufc_dtree_20)
+# Checking attribute usage
+summary(ufc_dtree_final)
 
-dtree_20_metrics <- unlist(c(dtree_20_metrics, 
-                             "AUC" = auc_and_perf_dtree_20[[1]]))
+# Creating predictions
+ufc_predictions_dtree_final <- predict(ufc_dtree_final, test_data)
 
-plot(auc_and_perf_dtree_20[[2]], 
-     main='ROC Curve for Decision tree with trials = 20')
+# Evaluating performance
+dtree_final_metrics  <- get_metrics(ufc_predictions_dtree_final)
+# Getting AUC and performance model needed for plotting the ROC curve
+auc_and_perf_dtree_final <- get_auc_and_perf(ufc_dtree_final)
+# Setting accuracy, sensitivity, specificity and AUC in one variable
+dtree_final_metrics <- unlist(c(dtree_final_metrics, 
+                             "AUC" = auc_and_perf_dtree_final[[1]]))
+
+# Plotting the ROC curve with the trials that had maximum AUC
+plot(auc_and_perf_dtree_final[[2]], 
+     main=paste('ROC Curve for Decision tree with trials = ', 
+                highest_auc_index_dtree))
 
 
 ################################################################################
 #############################    RANDOM FOREST    ##############################
 ################################################################################
 
-# creating model
+# creating RF model
 ufc_rf <- randomForest(training_data_without_class, training_data_only_class,
                        ntree = 500,
                        mtry = sqrt(length(training_data_without_class)),
@@ -224,11 +212,13 @@ ufc_rf <- randomForest(training_data_without_class, training_data_only_class,
 ufc_predictions_rf <- predict(ufc_rf, test_data)
 
 # Evaluating performance
+# Getting accuracy, sensitivity and specificity
 rf_metrics <- get_metrics(ufc_predictions_rf)
-
+# Getting AUC and performance object that is needed for plotting the ROC curve
 auc_and_perf_rf <- get_auc_and_perf(ufc_rf)
+# Storing all 4 metrics in one variable
 rf_metrics <- unlist(c(rf_metrics, "AUC" = auc_and_perf_rf[[1]]))
-
+# PLotting the ROC curve
 plot(auc_and_perf_rf[[2]], main='ROC Curve for RF')
 
 
@@ -250,19 +240,19 @@ rf_creation <- function(number_of_trees, number_of_features){
   return (list(ufc_rf_model, ufc_predictions_for_model))
 }
 
-
+# Setting possible values for number of trees for each tree
 number_of_trees <- seq(100,1000,100)
-
+# Setting possible values for number of features for each tree
 number_of_features <- c(sqrt(length(training_data_without_class)), 10, 15, 20)
 
-#all possible combinations of given number of trees and features
+# All possible combinations of given number of trees and features
 combinations <- expand.grid(number_of_trees, number_of_features) 
+# Separating the number of trees and number of features as separate lists
 n_of_trees <- combinations$Var1
 n_of_features <- combinations$Var2
 
 #creating 10*4 = 40 random forests
 rf_models_and_predictions <- lapply(n_of_trees, rf_creation, n_of_features)
-
 
 #Separating models and predictions
 rf_models <- lapply(rf_models_and_predictions, `[[`, 1) 
@@ -284,14 +274,17 @@ rownames(auc_for_rf_df) <- 1:40 #changing row names
 #Merging two dataframes
 all_metrics_rf <- cbind(metrics_for_rf_per_trial, auc_for_rf_df)
 
-# we picked the one with highest AUC = index 17 
-# ntree = 700, mtry = 10
-max(all_metrics_rf[,4]) 
+# getting index of all_metrics_rf with max AUC
+highest_auc_index_rf <- which(all_metrics_rf$AUC==max(all_metrics_rf[,4]))
+
+# getting the number of trees and number of features combination that produces the maximum AUC
+best_number_of_trees <- combinations[highest_auc_index_rf,]$Var1
+best_number_of_features <- combinations[highest_auc_index_rf,]$Var2
 
 #Creating random forest with these hyperparameters
 ufc_rf_final <- randomForest(training_data_without_class, 
                              training_data_only_class, 
-                             ntree = 300, mtry = 15)
+                             ntree = best_number_of_trees, mtry = best_number_of_features)
 
 # Creating predictions
 ufc_rf_final_predictions <- predict(ufc_rf_final, test_data)
@@ -301,10 +294,17 @@ rf_final_metrics <- get_metrics(ufc_rf_final_predictions)
 
 # geting auc value and performance object for ploting ROC curve
 auc_and_perf_rf_final <- get_auc_and_perf(ufc_rf_final)
+# Storing all 4 metrics in one variable
 rf_final_metrics <- unlist(c(rf_final_metrics,
                              "AUC" = auc_and_perf_rf_final[[1]]))
+# Plotting the ROC curve
+plot(auc_and_perf_rf_final[[2]], 
+     main=paste('ROC Curve for RF with ntree = ', best_number_of_trees, 
+                ' and mtry = ', best_number_of_features))
 
-plot(auc_and_perf_rf_final[[2]], main='ROC Curve for RF')
+# Checking the importance of features for random forest
+varImp(ufc_rf_final)
+# Feature selection will be done at the end
 
 ################################################################################
 ####################################   KNN   ###################################
@@ -317,6 +317,8 @@ min_max_norm <- function(x){
 
 #normalizing the data
 df_normalized <- as.data.frame(lapply(df[,-1], min_max_norm))
+
+# Splitting on training and test set
 training_data_knn <- df_normalized[sample_, ] 
 test_data_knn <- df_normalized[-sample_, ] 
 
@@ -325,9 +327,8 @@ test_data_knn <- df_normalized[-sample_, ]
 ufc_knn <- knn(train = training_data_knn, 
                test = test_data_knn, 
                cl = training_data_only_class, 
-               k = sqrt(length(training_data$winner)), 
+               k = round(sqrt(length(training_data$winner))), 
                prob=TRUE)
-
 
 # Evaluating performance
 knn_metrics <- get_metrics(ufc_knn)
@@ -338,14 +339,16 @@ prob_knn <- 2*ifelse(ufc_knn == '-1', 1-prob_knn, prob_knn) - 1
 pred_knn <- prediction(prob_knn, test_data$winner)
 performance_knn <- performance(pred_knn, 'tpr','fpr')
 
-#Plotting the ROC Curve for KNN
-plot(performance_knn, avg='threshold', lwd=3, main='ROC Curve for KNN')
+# Plotting the ROC Curve for KNN
+plot(performance_knn, avg='threshold',
+     main=paste('ROC Curve for KNN with k = ',
+                round(sqrt(length(training_data$winner)))))
 
 #Getting the AUC value for KNN
 knn_auc <- performance(pred_knn, measure='auc')
-str(knn_auc) #0.6926078 AUC for KNN
-knn_auc_value <- knn_auc@y.values 
 
+knn_auc_value <- knn_auc@y.values 
+# Storing all 4 metrics in one variable
 knn_metrics <- unlist(c(knn_metrics, 'AUC' = knn_auc_value))
 
 ################################################################################
@@ -358,7 +361,7 @@ train_control_cv <- trainControl(method='cv',
                                  classProbs = TRUE,
                                  summaryFunction = mix_summary,
                                  savePredictions = TRUE)
-
+# Train control with repeated CV
 train_control_repeated_cv <- trainControl(method='repeatedcv',
                                           number = 3,
                                           repeats = 4,
@@ -381,7 +384,8 @@ train_control_LOOCV <- trainControl(method='LOOCV',
 ################################################################################
 ######################   C5.0 WITH DIFFERENT RESAMPLING METHODS   ##############
 ################################################################################
-
+# Creates C50 decision tree model
+# Returns 4 metrics and performance object that is required for plotting the ROC curve
 train_c50 <- function(train_control_obj) {
   
   # creating C5.0 model 
@@ -407,8 +411,6 @@ ufc_dtree_cv_10 <- train_c50(train_control_cv)
 # Evaluating performance
 dtree_cv_metrics <- ufc_dtree_cv_10[[1]]
 
-plot(ufc_dtree_cv_10[[2]])
-
 # Using repeated cross validation
 ufc_dtree_repeated_cv <- train_c50(train_control_repeated_cv)
 
@@ -420,6 +422,17 @@ ufc_dtree_boot <- train_c50(train_control_bootstrap)
 
 # Evaluating performance
 dtree_boot_metrics <- ufc_dtree_boot[[1]]
+
+# Plotting the ROC curves for C5.0
+
+# Plotting the ROC curve for 10-fold CV C5.0 model
+plot(ufc_dtree_cv_10[[2]], main = 'C5.0 with 10-fold CV')
+# Plotting the ROC curve for repeated CV C5.0 model
+plot(ufc_dtree_repeated_cv[[2]], main = 'C5.0 with repeated CV')
+# Plotting the ROC curve for C5.0 model with bootstrap sampling
+plot(ufc_dtree_boot[[2]], main = 'C5.0 bootstrap sampling')
+
+
 
 ################################################################################
 ############    RANDOM FOREST WITH DIFFERENT RESAMPLING METHODS   ##############
@@ -449,8 +462,6 @@ ufc_rf_cv_10 <- train_rf(train_control_cv)
 # Evaluating performance
 rf_cv_metrics <- ufc_rf_cv_10[[1]]
 
-plot(ufc_rf_cv_10[[2]])
-
 # Using repeated cross validation
 ufc_rf_repeated_cv <- train_rf(train_control_repeated_cv)
 
@@ -463,10 +474,22 @@ ufc_rf_boot <- train_rf(train_control_bootstrap)
 # Evaluating performance
 rf_boot_metrics <- ufc_rf_boot[[1]]
 
+# Plotting the ROC curves for RF
+
+# Plotting the ROC curve for 10-fold CV RF model
+plot(ufc_rf_cv_10[[2]], main = 'Random Forest with 10-fold CV')
+# Plotting the ROC curve for repeated CV RF model
+plot(ufc_rf_repeated_cv[[2]], main = 'Random Forest repeated CV')
+# Plotting the ROC curve for RF model with bootstrap sampling
+plot(ufc_rf_boot[[2]], main = 'Random Forest with bootstrap sampling')
+
+
 ################################################################################
 ##############################   10 FOLD CV KNN   ##############################
 ################################################################################
 
+# Function for creating 10-fold CV KNN
+# Returns metrics and performance object that is used for plotting ROC curve
 train_knn <- function(train_control_obj) {
 
   model <-  train (winner ~ .,
@@ -485,7 +508,6 @@ train_knn <- function(train_control_obj) {
   
   return(list(metrics, performance_knn))
 }
-
 
 # Using cross validation
 ufc_knn_cv_10 <- train_knn(train_control_cv)
@@ -508,30 +530,23 @@ ufc_knn_boot <- train_knn(train_control_bootstrap)
 knn_boot_metrics <- ufc_knn_boot[[1]]
 
 
+# Plotting the ROC curves for KNN
+
+# Plotting the ROC curve for 10-fold CV RF model
+plot(ufc_knn_cv_10[[2]], main = 'KNN with 10-fold CV')
+# Plotting the ROC curve for repeated CV RF model
+plot(ufc_knn_repeated_cv[[2]], main = 'KNN repeated CV')
+# Plotting the ROC curve for RF model with bootstrap sampling
+plot(ufc_knn_boot[[2]], main = 'KNN with bootstrap sampling')
 
 ################################################################################
 ############## ROC Curves for models with cross validation  ####################
 ################################################################################
 
-roc_curves <- evalm(list(ufc_dtree_cv_10, ufc_rf_cv_10, ufc_knn_cv_10),
-                    gnames=c('DTree CV10','RF CV10', 'KNN CV10'))
-# AUC for DTree CV 10 = 0.9 roc_curves$stdres$`DTree CV10`$Score[13]
-# AUC for RF CV 10 = 0.91 roc_curves$stdres$`RF CV10`$Score[13]
-# AUC for KNN CV 10 = 0.88 roc_curves$stdres$`DTree CV10`$Score[13]
-#roc curve
-roc_curves$roc
-
-dtree_cv_metrics <-  unlist(c(dtree_cv_metrics,
-                              "AUC" = roc_curves$stdres$`DTree CV10`$Score[13]))
-rf_cv_metrics <-  unlist(c(rf_cv_metrics, 
-                           "AUC" = roc_curves$stdres$`RF CV10`$Score[13]))
-knn_cv_metrics <-  unlist(c(knn_cv_metrics, 
-                            "AUC" = roc_curves$stdres$`DTree CV10`$Score[13]))
-
 
 ##############################     ALL METRICS    ##############################
 
-all_metrics <- data.frame(dtree_metrics, dtree_20_metrics, dtree_cv_metrics,
+all_metrics <- data.frame(dtree_metrics, dtree_final_metrics, dtree_cv_metrics,
                           dtree_repeated_cv_metrics, dtree_boot_metrics,
                           rf_metrics, rf_final_metrics, rf_cv_metrics, 
                           rf_repeated_cv_metrics, rf_boot_metrics, 
@@ -542,21 +557,43 @@ all_metrics <- data.frame(dtree_metrics, dtree_20_metrics, dtree_cv_metrics,
 # Checking the importane of features for random forest
 varImp(ufc_rf_final)
 # threshold 10
-# Red_sig_str_rnd_1 and blue
-# red_tot_str_rnd_1 and blue
-# red_tot_str_attempt_rnd_1 and blue
-# red_ctrl_time_rnd_1 and blue
-# red_sig_str_rnd_2                 
-# red_tot_str_rnd_2                 
+# Variables where both red and blue column have threshold > 10
+# red_sig_str_rnd_1
+# red_tot_str_rnd_1
+# red_tot_str_attempt_rnd_1 # since for rnd_2 and rnd_3 this feature is included, we will include this feature
+# red_ctrl_time_rnd_1
+# 
+# red_sig_str_rnd_2
+# red_tot_str_rnd_2
 # red_tot_str_attempt_rnd_2
-# red_ctrl_time_rnd_2               
-# red_sig_str_rnd_3                 
+# red_ctrl_time_rnd_2
+# 
+# red_sig_str_rnd_3
 # red_tot_str_rnd_3
-# red_tot_str_attempt_rnd_3
-# red_tot_str_attempt_rnd_3 (blue has 9.84, but we will include it because red has 13.59)
+# red_tot_str_attempt_rnd_3 
 # red_ctrl_time_rnd_3
+# 
 # red_sig_str_head_rnd_1
 # red_sig_str_head_rnd_2
-# red_sig_str_head_rnd_3    
-# 16*2 = 32 features?
+# red_sig_str_head_rnd_3
+# red_sig_str_dist_rnd_2 # since for rnd_1 and rnd_3 are not included, we will not include this feature
+
+# Creating dataframe with the features that satisfied the criteria
+new_df <- df[c('red_sig_str_rnd_1', 'red_tot_str_rnd_1', 
+               'red_tot_str_attempt_rnd_1', 'red_ctrl_time_rnd_1',
+               'red_sig_str_rnd_2', 'red_tot_str_rnd_2', 
+               'red_tot_str_attempt_rnd_2', 'red_ctrl_time_rnd_2',
+               'red_sig_str_rnd_3', 'red_tot_str_rnd_3',
+               'red_tot_str_attempt_rnd_3', 'red_ctrl_time_rnd_3',
+               'red_sig_str_head_rnd_1',
+               'red_sig_str_head_rnd_2',
+               'red_sig_str_head_rnd_3')]
+# Creating .csv file that has only important features
+write.csv(new_df, 'ufcstats_rf_features.csv', row.names = FALSE)
+
+
+
+
+
+
 
