@@ -121,9 +121,6 @@ auc_and_perf_dtree <- get_auc_and_perf(ufc_dtree)
 
 dtree_metrics <- unlist(c(dtree_metrics, "AUC" = auc_and_perf_dtree[[1]]))
 
-plot(auc_and_perf_dtree[[2]], main='ROC Curve for Dtree')
-
-
 # IMPROVING PERFORMANCE
 
 # Creating C5.0 decision trees with specified trials and 
@@ -192,12 +189,6 @@ auc_and_perf_dtree_final <- get_auc_and_perf(ufc_dtree_final)
 dtree_final_metrics <- unlist(c(dtree_final_metrics, 
                              "AUC" = auc_and_perf_dtree_final[[1]]))
 
-# Plotting the ROC curve with the trials that had maximum AUC
-plot(auc_and_perf_dtree_final[[2]], 
-     main=paste('ROC Curve for Decision tree with trials = ', 
-                highest_auc_index_dtree))
-
-
 ################################################################################
 #############################    RANDOM FOREST    ##############################
 ################################################################################
@@ -218,9 +209,6 @@ rf_metrics <- get_metrics(ufc_predictions_rf)
 auc_and_perf_rf <- get_auc_and_perf(ufc_rf)
 # Storing all 4 metrics in one variable
 rf_metrics <- unlist(c(rf_metrics, "AUC" = auc_and_perf_rf[[1]]))
-# PLotting the ROC curve
-plot(auc_and_perf_rf[[2]], main='ROC Curve for RF')
-
 
 # IMPROVING PERFORMANCE
 
@@ -297,10 +285,6 @@ auc_and_perf_rf_final <- get_auc_and_perf(ufc_rf_final)
 # Storing all 4 metrics in one variable
 rf_final_metrics <- unlist(c(rf_final_metrics,
                              "AUC" = auc_and_perf_rf_final[[1]]))
-# Plotting the ROC curve
-plot(auc_and_perf_rf_final[[2]], 
-     main=paste('ROC Curve for RF with ntree = ', best_number_of_trees, 
-                ' and mtry = ', best_number_of_features))
 
 # Checking the importance of features for random forest
 varImp(ufc_rf_final)
@@ -338,11 +322,6 @@ prob_knn <- attr(ufc_knn, 'prob')
 prob_knn <- 2*ifelse(ufc_knn == '-1', 1-prob_knn, prob_knn) - 1
 pred_knn <- prediction(prob_knn, test_data$winner)
 performance_knn <- performance(pred_knn, 'tpr','fpr')
-
-# Plotting the ROC Curve for KNN
-plot(performance_knn, avg='threshold',
-     main=paste('ROC Curve for KNN with k = ',
-                round(sqrt(length(training_data$winner)))))
 
 #Getting the AUC value for KNN
 knn_auc <- performance(pred_knn, measure='auc')
@@ -423,16 +402,6 @@ ufc_dtree_boot <- train_c50(train_control_bootstrap)
 # Evaluating performance
 dtree_boot_metrics <- ufc_dtree_boot[[1]]
 
-# Plotting the ROC curves for C5.0
-
-# Plotting the ROC curve for 10-fold CV C5.0 model
-plot(ufc_dtree_cv_10[[2]], main = 'C5.0 with 10-fold CV')
-# Plotting the ROC curve for repeated CV C5.0 model
-plot(ufc_dtree_repeated_cv[[2]], main = 'C5.0 with repeated CV')
-# Plotting the ROC curve for C5.0 model with bootstrap sampling
-plot(ufc_dtree_boot[[2]], main = 'C5.0 bootstrap sampling')
-
-
 
 ################################################################################
 ############    RANDOM FOREST WITH DIFFERENT RESAMPLING METHODS   ##############
@@ -473,16 +442,6 @@ ufc_rf_boot <- train_rf(train_control_bootstrap)
 
 # Evaluating performance
 rf_boot_metrics <- ufc_rf_boot[[1]]
-
-# Plotting the ROC curves for RF
-
-# Plotting the ROC curve for 10-fold CV RF model
-plot(ufc_rf_cv_10[[2]], main = 'Random Forest with 10-fold CV')
-# Plotting the ROC curve for repeated CV RF model
-plot(ufc_rf_repeated_cv[[2]], main = 'Random Forest repeated CV')
-# Plotting the ROC curve for RF model with bootstrap sampling
-plot(ufc_rf_boot[[2]], main = 'Random Forest with bootstrap sampling')
-
 
 ################################################################################
 ##############################   10 FOLD CV KNN   ##############################
@@ -529,6 +488,49 @@ ufc_knn_boot <- train_knn(train_control_bootstrap)
 # Evaluating performance
 knn_boot_metrics <- ufc_knn_boot[[1]]
 
+################################################################################
+###############################  ALL ROC CURVES  ############################### 
+################################################################################
+
+# Plotting the ROC curve for C5.0 with default hyperparameter
+plot(auc_and_perf_dtree[[2]], 
+     main='ROC Curve for C5.0 with default trials hyperparameter')
+
+# Plotting the ROC curve with the trials that had maximum AUC
+plot(auc_and_perf_dtree_final[[2]], 
+     main=paste('ROC Curve for Decision tree with trials = ', 
+                highest_auc_index_dtree))
+
+# Plotting the ROC curve for RF with default hyperparameters
+plot(auc_and_perf_rf[[2]], main='ROC Curve for RF with default parameters')
+
+# Plotting the ROC curve with optimal hyperparameters
+plot(auc_and_perf_rf_final[[2]], 
+     main=paste('ROC Curve for RF with ntree = ', best_number_of_trees, 
+                ' and mtry = ', best_number_of_features))
+
+# Plotting the ROC Curve for KNN
+plot(performance_knn, avg='threshold',
+     main=paste('ROC Curve for KNN with k = ',
+                round(sqrt(length(training_data$winner)))))
+
+# Plotting the ROC curves for C5.0
+
+# Plotting the ROC curve for 10-fold CV C5.0 model
+plot(ufc_dtree_cv_10[[2]], main = 'C5.0 with 10-fold CV')
+# Plotting the ROC curve for repeated CV C5.0 model
+plot(ufc_dtree_repeated_cv[[2]], main = 'C5.0 with repeated CV')
+# Plotting the ROC curve for C5.0 model with bootstrap sampling
+plot(ufc_dtree_boot[[2]], main = 'C5.0 bootstrap sampling')
+
+# Plotting the ROC curves for RF
+
+# Plotting the ROC curve for 10-fold CV RF model
+plot(ufc_rf_cv_10[[2]], main = 'Random Forest with 10-fold CV')
+# Plotting the ROC curve for repeated CV RF model
+plot(ufc_rf_repeated_cv[[2]], main = 'Random Forest repeated CV')
+# Plotting the ROC curve for RF model with bootstrap sampling
+plot(ufc_rf_boot[[2]], main = 'Random Forest with bootstrap sampling')
 
 # Plotting the ROC curves for KNN
 
@@ -538,11 +540,6 @@ plot(ufc_knn_cv_10[[2]], main = 'KNN with 10-fold CV')
 plot(ufc_knn_repeated_cv[[2]], main = 'KNN repeated CV')
 # Plotting the ROC curve for RF model with bootstrap sampling
 plot(ufc_knn_boot[[2]], main = 'KNN with bootstrap sampling')
-
-################################################################################
-############## ROC Curves for models with cross validation  ####################
-################################################################################
-
 
 ##############################     ALL METRICS    ##############################
 
