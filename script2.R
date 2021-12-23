@@ -12,6 +12,8 @@ library(class)
 library(MLeval)
 library(pROC)
 library(ROCR)
+library(ggplot2)
+library(jcolors)
 
 df <- read.csv("ufcstats_cleaned.csv", header = TRUE, sep = ",")
 
@@ -541,6 +543,86 @@ plot(ufc_knn_repeated_cv[[2]], main = 'KNN repeated CV')
 # Plotting the ROC curve for RF model with bootstrap sampling
 plot(ufc_knn_boot[[2]], main = 'KNN with bootstrap sampling')
 
+# Plotting all ROC curves together on one plot
+x_values_all <- c(auc_and_perf_dtree[[2]]@x.values[[1]], 
+                  auc_and_perf_dtree_final[[2]]@x.values[[1]],
+                  auc_and_perf_rf[[2]]@x.values[[1]],
+                  auc_and_perf_rf_final[[2]]@x.values[[1]],
+                  performance_knn@x.values[[1]],
+                  ufc_dtree_cv_10[[2]]@x.values[[1]],
+                  ufc_dtree_repeated_cv[[2]]@x.values[[1]],
+                  ufc_dtree_boot[[2]]@x.values[[1]],
+                  ufc_rf_cv_10[[2]]@x.values[[1]],
+                  ufc_rf_repeated_cv[[2]]@x.values[[1]],
+                  ufc_rf_boot[[2]]@x.values[[1]],
+                  ufc_knn_cv_10[[2]]@x.values[[1]],
+                  ufc_knn_repeated_cv[[2]]@x.values[[1]],
+                  ufc_knn_boot[[2]]@x.values[[1]])
+
+y_values_all <- c(auc_and_perf_dtree[[2]]@y.values[[1]], 
+                  auc_and_perf_dtree_final[[2]]@y.values[[1]],
+                  auc_and_perf_rf[[2]]@y.values[[1]],
+                  auc_and_perf_rf_final[[2]]@y.values[[1]],
+                  performance_knn@y.values[[1]],
+                  ufc_dtree_cv_10[[2]]@y.values[[1]],
+                  ufc_dtree_repeated_cv[[2]]@y.values[[1]],
+                  ufc_dtree_boot[[2]]@y.values[[1]],
+                  ufc_rf_cv_10[[2]]@y.values[[1]],
+                  ufc_rf_repeated_cv[[2]]@y.values[[1]],
+                  ufc_rf_boot[[2]]@y.values[[1]],
+                  ufc_knn_cv_10[[2]]@y.values[[1]],
+                  ufc_knn_repeated_cv[[2]]@y.values[[1]],
+                  ufc_knn_boot[[2]]@y.values[[1]])
+
+id_column <- c(rep('Decision Tree (Default)', 
+                               length(auc_and_perf_dtree[[2]]@x.values[[1]])),
+                           rep('Decision Tree (Final)', 
+                               length(
+                                 auc_and_perf_dtree_final[[2]]@x.values[[1]])),
+                           rep('Random Forest (Default)', 
+                               length(auc_and_perf_rf[[2]]@x.values[[1]])),
+                           rep('Random Forest (Final)', 
+                               length(
+                                 auc_and_perf_rf_final[[2]]@x.values[[1]])),
+                           rep('KNN (Default)', 
+                               length(performance_knn@x.values[[1]])),
+                           rep('Decision Tree (CV)', 
+                               length(ufc_dtree_cv_10[[2]]@x.values[[1]])),
+                           rep('Decision Tree (Repeated CV)', 
+                               length(
+                                 ufc_dtree_repeated_cv[[2]]@x.values[[1]])),
+                           rep('Decision Tree (Bootstrap)', 
+                               length(ufc_dtree_boot[[2]]@x.values[[1]])),
+                           rep('Random Forest (CV)', 
+                               length(ufc_rf_cv_10[[2]]@x.values[[1]])),
+                           rep('Random Forest (Repeated CV)', 
+                               length(ufc_rf_repeated_cv[[2]]@x.values[[1]])),
+                           rep('Random Forest (Bootstrap)', 
+                               length(ufc_rf_boot[[2]]@x.values[[1]])),
+                           rep('KNN (CV)', 
+                               length(ufc_knn_cv_10[[2]]@x.values[[1]])),
+                           rep('KNN (Repeated CV)', 
+                               length(ufc_knn_repeated_cv[[2]]@x.values[[1]])),
+                           rep('KNN (Bootstrap)', 
+                               length(ufc_knn_boot[[2]]@x.values[[1]])))
+                  
+roc_df <- data.frame(x=x_values_all, y=y_values_all, Model=id_column)
+
+# Plotting the actual ggplot
+ggplot(roc_df, aes(x = x, y = y, color = Model)) +
+  geom_line(size = 1) +
+  geom_abline(intercept = 0, slope = 1) +
+  scale_color_manual(values = c('#e6194b', '#3cb44b', '#ffe119', '#4363d8', 
+                                '#f58231', '#911eb4', '#46f0f0', '#f032e6', 
+                                '#bcf60c', '#fabebe', '#008080', '#808080', 
+                                '#910606', '#000000')) +
+  labs(title = "All ROC curves plotted", 
+       x = "False Positive Rate", 
+       y = "True Positive Rate") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5), text = element_text(size = 20),
+        legend.position = c(0.87, 0.3))
+
 ##############################     ALL METRICS    ##############################
 
 all_metrics <- data.frame(dtree_metrics, dtree_final_metrics, dtree_cv_metrics,
@@ -550,6 +632,10 @@ all_metrics <- data.frame(dtree_metrics, dtree_final_metrics, dtree_cv_metrics,
                           knn_metrics, knn_cv_metrics, knn_repeated_cv_metrics,
                           knn_boot_metrics)
 
+
+# Export metrics to the csv to use it in the presentation/report.
+all_metrics_t <- t(as.data.frame(all_metrics))
+write.csv(all_metrics_t, file = "final_metrics.csv", sep = ",")
 
 # Checking the importane of features for random forest
 varImp(ufc_rf_final)
