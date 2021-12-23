@@ -403,6 +403,8 @@ for (red_col in red_columns) {
 
 write.csv(new_df, 'ufcstats_cleaned2.csv', row.names = FALSE)
 
+df4 <- clean_df
+
 
 
 
