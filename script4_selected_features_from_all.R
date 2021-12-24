@@ -15,7 +15,7 @@ library(ROCR)
 library(ggplot2)
 library(jcolors)
 
-df <- read.csv("ufcstats_cleaned.csv", header = TRUE, sep = ",")
+df <- read.csv("ufcstats_rf_features.csv", header = TRUE, sep = ",")
 
 str(df) 
 set.seed(1)
@@ -69,7 +69,7 @@ get_metrics <-function(model_predictions){
 # defaultSummary Accuracy and Kappa
 mix_summary <- function(data, lev = NULL, model = NULL){
   output <- c(twoClassSummary(data, lev, model), prSummary(data, lev, model), 
-           defaultSummary(data, lev, model))
+              defaultSummary(data, lev, model))
   # return (list(output[["AUC"]], output[["ROC"]], output[["Sens"]],
   #              output[["Spec"]], output[["Accuracy"]]))
   return(output)
@@ -82,10 +82,10 @@ get_auc_and_perf <- function (model){
   probabilities <- predict(model, test_data, type='prob')[,2] 
   predictions <- prediction(probabilities, labels = test_data$winner)
   performance_ <- performance(predictions, 'tpr','fpr')
-
+  
   auc <- performance(predictions, measure='auc')
   auc_value <- auc@y.values
-
+  
   return (c(auc_value, performance_))
 }
 
@@ -111,7 +111,7 @@ plot(ufc_dtree)
 
 # Checking attribute usage
 summary(ufc_dtree)
-        
+
 # Creating predictions
 ufc_predictions_dtree <- predict(object = ufc_dtree, test_data)
 
@@ -171,8 +171,8 @@ highest_auc_index_dtree <- which(all_metrics_dtree$AUC==max(all_metrics_dtree[,4
 
 #Creating model with the trials that had maximum AUC
 ufc_dtree_final <- C5.0(training_data_without_class, 
-                     training_data_only_class, 
-                     trials=highest_auc_index_dtree)
+                        training_data_only_class, 
+                        trials=highest_auc_index_dtree)
 
 # Evaluating performance
 plot(ufc_dtree_final)
@@ -189,7 +189,7 @@ dtree_final_metrics  <- get_metrics(ufc_predictions_dtree_final)
 auc_and_perf_dtree_final <- get_auc_and_perf(ufc_dtree_final)
 # Setting accuracy, sensitivity, specificity and AUC in one variable
 dtree_final_metrics <- unlist(c(dtree_final_metrics, 
-                             "AUC" = auc_and_perf_dtree_final[[1]]))
+                                "AUC" = auc_and_perf_dtree_final[[1]]))
 
 ################################################################################
 #############################    RANDOM FOREST    ##############################
@@ -452,7 +452,7 @@ rf_boot_metrics <- ufc_rf_boot[[1]]
 # Function for creating 10-fold CV KNN
 # Returns metrics and performance object that is used for plotting ROC curve
 train_knn <- function(train_control_obj) {
-
+  
   model <-  train (winner ~ .,
                    data = training_data, 
                    method ="knn", 
@@ -575,37 +575,37 @@ y_values_all <- c(auc_and_perf_dtree[[2]]@y.values[[1]],
                   ufc_knn_boot[[2]]@y.values[[1]])
 
 id_column <- c(rep('Decision Tree (Default)', 
-                               length(auc_and_perf_dtree[[2]]@x.values[[1]])),
-                           rep('Decision Tree (Final)', 
-                               length(
-                                 auc_and_perf_dtree_final[[2]]@x.values[[1]])),
-                           rep('Random Forest (Default)', 
-                               length(auc_and_perf_rf[[2]]@x.values[[1]])),
-                           rep('Random Forest (Final)', 
-                               length(
-                                 auc_and_perf_rf_final[[2]]@x.values[[1]])),
-                           rep('KNN (Default)', 
-                               length(performance_knn@x.values[[1]])),
-                           rep('Decision Tree (CV)', 
-                               length(ufc_dtree_cv_10[[2]]@x.values[[1]])),
-                           rep('Decision Tree (Repeated CV)', 
-                               length(
-                                 ufc_dtree_repeated_cv[[2]]@x.values[[1]])),
-                           rep('Decision Tree (Bootstrap)', 
-                               length(ufc_dtree_boot[[2]]@x.values[[1]])),
-                           rep('Random Forest (CV)', 
-                               length(ufc_rf_cv_10[[2]]@x.values[[1]])),
-                           rep('Random Forest (Repeated CV)', 
-                               length(ufc_rf_repeated_cv[[2]]@x.values[[1]])),
-                           rep('Random Forest (Bootstrap)', 
-                               length(ufc_rf_boot[[2]]@x.values[[1]])),
-                           rep('KNN (CV)', 
-                               length(ufc_knn_cv_10[[2]]@x.values[[1]])),
-                           rep('KNN (Repeated CV)', 
-                               length(ufc_knn_repeated_cv[[2]]@x.values[[1]])),
-                           rep('KNN (Bootstrap)', 
-                               length(ufc_knn_boot[[2]]@x.values[[1]])))
-                  
+                   length(auc_and_perf_dtree[[2]]@x.values[[1]])),
+               rep('Decision Tree (Final)', 
+                   length(
+                     auc_and_perf_dtree_final[[2]]@x.values[[1]])),
+               rep('Random Forest (Default)', 
+                   length(auc_and_perf_rf[[2]]@x.values[[1]])),
+               rep('Random Forest (Final)', 
+                   length(
+                     auc_and_perf_rf_final[[2]]@x.values[[1]])),
+               rep('KNN (Default)', 
+                   length(performance_knn@x.values[[1]])),
+               rep('Decision Tree (CV)', 
+                   length(ufc_dtree_cv_10[[2]]@x.values[[1]])),
+               rep('Decision Tree (Repeated CV)', 
+                   length(
+                     ufc_dtree_repeated_cv[[2]]@x.values[[1]])),
+               rep('Decision Tree (Bootstrap)', 
+                   length(ufc_dtree_boot[[2]]@x.values[[1]])),
+               rep('Random Forest (CV)', 
+                   length(ufc_rf_cv_10[[2]]@x.values[[1]])),
+               rep('Random Forest (Repeated CV)', 
+                   length(ufc_rf_repeated_cv[[2]]@x.values[[1]])),
+               rep('Random Forest (Bootstrap)', 
+                   length(ufc_rf_boot[[2]]@x.values[[1]])),
+               rep('KNN (CV)', 
+                   length(ufc_knn_cv_10[[2]]@x.values[[1]])),
+               rep('KNN (Repeated CV)', 
+                   length(ufc_knn_repeated_cv[[2]]@x.values[[1]])),
+               rep('KNN (Bootstrap)', 
+                   length(ufc_knn_boot[[2]]@x.values[[1]])))
+
 roc_df <- data.frame(x=x_values_all, y=y_values_all, Model=id_column)
 
 # Plotting the actual ggplot
@@ -632,56 +632,7 @@ all_metrics <- data.frame(dtree_metrics, dtree_final_metrics, dtree_cv_metrics,
                           knn_metrics, knn_cv_metrics, knn_repeated_cv_metrics,
                           knn_boot_metrics)
 
-
 # Export metrics to the csv to use it in the presentation/report.
 all_metrics_t <- t(as.data.frame(all_metrics))
-write.csv(all_metrics_t, file = "final_metrics.csv", sep = ",")
-
-# Checking the importane of features for random forest
-varImp(ufc_rf_final)
-# threshold 10
-# Variables where both red and blue column have threshold > 10
-# red_sig_str_rnd_1
-# red_tot_str_rnd_1
-# red_tot_str_attempt_rnd_1 # since for rnd_2 and rnd_3 this feature is included, we will include this feature
-# red_ctrl_time_rnd_1
-# 
-# red_sig_str_rnd_2
-# red_tot_str_rnd_2
-# red_tot_str_attempt_rnd_2
-# red_ctrl_time_rnd_2
-# 
-# red_sig_str_rnd_3
-# red_tot_str_rnd_3
-# red_tot_str_attempt_rnd_3 
-# red_ctrl_time_rnd_3
-# 
-# red_sig_str_head_rnd_1
-# red_sig_str_head_rnd_2
-# red_sig_str_head_rnd_3
-# red_sig_str_dist_rnd_2 # since for rnd_1 and rnd_3 are not included, we will not include this feature
-
-# Creating dataframe with the features that satisfied the criteria
-new_df <- df[c('winner', 'red_sig_str_rnd_1', 'red_tot_str_rnd_1', 
-               'red_tot_str_attempt_rnd_1', 'red_ctrl_time_rnd_1',
-               'red_sig_str_rnd_2', 'red_tot_str_rnd_2', 
-               'red_tot_str_attempt_rnd_2', 'red_ctrl_time_rnd_2',
-               'red_sig_str_rnd_3', 'red_tot_str_rnd_3',
-               'red_tot_str_attempt_rnd_3', 'red_ctrl_time_rnd_3',
-               'red_sig_str_head_rnd_1',
-               'red_sig_str_head_rnd_2',
-               'red_sig_str_head_rnd_3',
-               'blue_sig_str_rnd_1', 'blue_tot_str_rnd_1', 
-               'blue_tot_str_attempt_rnd_1', 'blue_ctrl_time_rnd_1',
-               'blue_sig_str_rnd_2', 'blue_tot_str_rnd_2', 
-               'blue_tot_str_attempt_rnd_2', 'blue_ctrl_time_rnd_2',
-               'blue_sig_str_rnd_3', 'blue_tot_str_rnd_3',
-               'blue_tot_str_attempt_rnd_3', 'blue_ctrl_time_rnd_3',
-               'blue_sig_str_head_rnd_1',
-               'blue_sig_str_head_rnd_2',
-               'blue_sig_str_head_rnd_3')]
-# Creating .csv file that has only important features
-write.csv(new_df, 'ufcstats_rf_features.csv', row.names = FALSE)
-
-
+write.csv(all_metrics_t, file = "final_metrics_rf.csv", sep = ",")
 
