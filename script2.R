@@ -681,7 +681,7 @@ new_df <- df[c('winner', 'red_sig_str_rnd_1', 'red_tot_str_rnd_1',
                'blue_sig_str_head_rnd_2',
                'blue_sig_str_head_rnd_3')]
 # Creating .csv file that has only important features
-write.csv(new_df, 'ufcstats_rf_features.csv', row.names = FALSE)
+write.csv(new_df, 'ufcstats_selected_features_from_rf.csv', row.names = FALSE)
 
 
 
