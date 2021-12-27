@@ -14,8 +14,15 @@ library(pROC)
 library(ROCR)
 library(ggplot2)
 library(jcolors)
+# Dataset with all features
 
 df <- read.csv("ufcstats_cleaned.csv", header = TRUE, sep = ",")
+# Dataset with selected features 
+# df <- read.csv("ufcstats_selected_features_from_rf.csv", header = TRUE, sep = ",")
+# 
+# # Dataset with combined features
+# df <- read.csv("ufcstats_cleaned2.csv", header = TRUE, sep = ",")
+# 
 
 str(df) 
 set.seed(1)
@@ -404,7 +411,6 @@ ufc_dtree_boot <- train_c50(train_control_bootstrap)
 # Evaluating performance
 dtree_boot_metrics <- ufc_dtree_boot[[1]]
 
-
 ################################################################################
 ############    RANDOM FOREST WITH DIFFERENT RESAMPLING METHODS   ##############
 ################################################################################
@@ -446,7 +452,7 @@ ufc_rf_boot <- train_rf(train_control_bootstrap)
 rf_boot_metrics <- ufc_rf_boot[[1]]
 
 ################################################################################
-##############################   10 FOLD CV KNN   ##############################
+##################### KNN WITH DIFFERENT RESAMPLING METHODS ####################
 ################################################################################
 
 # Function for creating 10-fold CV KNN
@@ -467,7 +473,7 @@ train_knn <- function(train_control_obj) {
   
   metrics <- c(get_metrics(prediction), 'AUC' = auc_and_performance[[1]])
   
-  return(list(metrics, performance_knn))
+  return(list(metrics, auc_and_performance[[2]]))
 }
 
 # Using cross validation
@@ -475,8 +481,6 @@ ufc_knn_cv_10 <- train_knn(train_control_cv)
 
 # Evaluating performance
 knn_cv_metrics <- ufc_knn_cv_10[[1]]
-
-plot(ufc_knn_cv_10[[2]])
 
 # Using repeated cross validation
 ufc_knn_repeated_cv <- train_knn(train_control_repeated_cv)
@@ -616,7 +620,7 @@ ggplot(roc_df, aes(x = x, y = y, color = Model)) +
                                 '#f58231', '#911eb4', '#46f0f0', '#f032e6', 
                                 '#bcf60c', '#fabebe', '#008080', '#808080', 
                                 '#910606', '#000000')) +
-  labs(title = "All ROC curves plotted", 
+  labs(title = "All ROC curves for dataset with selected features", 
        x = "False Positive Rate", 
        y = "True Positive Rate") +
   theme_light() +

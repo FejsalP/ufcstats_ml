@@ -385,7 +385,7 @@ clean_df <- clean_df[, -c(56:79)]
 
 write.csv(clean_df, 'ufcstats_cleaned.csv', row.names = FALSE)
 
-
+# Creating columns_combined dataset 
 df3 <- clean_df
 
 new_df <- as.data.frame(df3$winner, col.names=names(df3$winner))
