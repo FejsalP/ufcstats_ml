@@ -6,5 +6,5 @@ Fejsal Perva - [@FejsalP](https://github.com/FejsalP)
 
 The data was scraped from: http://www.ufcstats.com/. Afterwards, several machine learning algorithms and sampling methods were applied on datasets.
 
-For more information about the application and the project please refer to: 
+For more information about the application and the project please refer to: [UFC_Project_Report](https://github.com/FejsalP/ufcstats_ml/blob/master/EE418%20Project%20Report.pdf)
 
